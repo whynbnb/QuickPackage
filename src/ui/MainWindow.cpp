@@ -129,23 +129,32 @@ MainWindow::MainWindow(QWidget *parent)
                 m_updatesButton->setEnabled(count > 0);
                 updateCounters();
                 if (count > 0) {
-                    notify(QStringLiteral("update-available"),
-                           i18n("Updates available"),
-                           i18np("1 update is available", "%1 updates are available",
-                                 count));
+                    // Avoid repeating the notification when nothing changed
+                    if (count != m_lastNotifiedUpdates) {
+                        notify(QStringLiteral("update-available"),
+                               i18n("Updates available"),
+                               i18np("1 update is available", "%1 updates are available",
+                                     count));
+                    }
                     m_statusLabel->setText(i18n("%1 updates available", count));
                 } else {
                     m_statusLabel->setText(i18n("All packages are up to date"));
                 }
+                m_lastNotifiedUpdates = count;
             });
     connect(&m_manager, &PackageManager::finished, this, [this](bool ok, const QString &message) {
         setBusy(false);
         if (!message.isEmpty())
             m_statusLabel->setText(message);
-        if (ok)
-            notify(QStringLiteral("operation-done"), i18n("Operation finished"), message);
-        else
-            notify(QStringLiteral("operation-failed"), i18n("Operation failed"), message);
+        // Only notify for user-initiated operations (install/remove);
+        // background refreshes stay silent in the status bar.
+        if (m_inUserOperation) {
+            m_inUserOperation = false;
+            if (ok)
+                notify(QStringLiteral("operation-done"), i18n("Operation finished"), message);
+            else
+                notify(QStringLiteral("operation-failed"), i18n("Operation failed"), message);
+        }
     });
 
     KConfigGroup group =
@@ -402,6 +411,7 @@ void MainWindow::installSelected()
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
     if (answer != QMessageBox::Yes)
         return;
+    m_inUserOperation = true;
     m_manager.install(packages);
 }
 
@@ -421,6 +431,7 @@ void MainWindow::removeSelected()
         QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
     if (answer != QMessageBox::Yes)
         return;
+    m_inUserOperation = true;
     m_manager.remove(packages);
 }
 

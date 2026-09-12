@@ -70,6 +70,8 @@ private:
     bool m_updatesLoaded = false;
     bool m_loadOnStart = false;
     int m_busyDepth = 0;
+    bool m_inUserOperation = false;
+    int m_lastNotifiedUpdates = -1;
 };
 
 #endif
