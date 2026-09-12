@@ -19,6 +19,14 @@ cmake --build "$BUILD_DIR" -j"$(nproc)"
 echo "==> 安装资源到 ~/.local …"
 cmake --install "$BUILD_DIR" --prefix "$HOME/.local" >/dev/null
 
+# GIO/xdg-desktop-portal 会校验 Exec 指向的二进制是否存在,
+# ~/.local/bin 不一定在 PATH 中,因此改写为绝对路径
+sed -i "s|^Exec=quickpackage.*|Exec=$HOME/.local/bin/quickpackage|" \
+    "$HOME/.local/share/applications/org.quickpackage.QuickPackage.desktop"
+update-desktop-database "$HOME/.local/share/applications" 2>/dev/null || true
+
+export PATH="$HOME/.local/bin:$PATH"
+
 echo "==> 启动 QuickPackage…"
 if [ -x "$HOME/.local/bin/quickpackage" ]; then
     exec "$HOME/.local/bin/quickpackage" "$@"
