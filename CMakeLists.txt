@@ -56,3 +56,5 @@ install(FILES data/org.quickpackage.QuickPackage.metainfo.xml
         DESTINATION ${CMAKE_INSTALL_DATADIR}/metainfo)
 install(FILES data/quickpackage.notifyrc
         DESTINATION ${CMAKE_INSTALL_DATADIR}/knotifications6)
+install(FILES data/quickpackageui.rc
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/kxmlgui5/quickpackage)

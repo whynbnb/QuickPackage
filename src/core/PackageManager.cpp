@@ -2,14 +2,14 @@
 
 #include <QDir>
 #include <QFile>
-#include <QFutureSynchronizer>
+#include <QMutex>
 #include <QProcess>
 #include <QRegularExpression>
 #include <QTextStream>
 #include <QThreadPool>
-#include <QtConcurrent/QtConcurrentRun>
 
-#include <algorithm>
+#include <memory>
+#include <utility>
 
 using Package = PackageModel::Package;
 using Backend = PackageModel::Backend;
@@ -39,7 +39,23 @@ QProcessEnvironment PackageManager::operationEnvironment() const
 
 PackageManager::PackageManager(QObject *parent)
     : QObject(parent)
+    , m_pool(new QThreadPool(this))
 {
+    m_pool->setMaxThreadCount(4);
+}
+
+PackageManager::~PackageManager()
+{
+    shutdown();
+}
+
+void PackageManager::shutdown()
+{
+    m_cancelled = true;
+    if (m_pool) {
+        m_pool->clear();
+        m_pool->waitForDone();
+    }
 }
 
 void PackageManager::setProxy(const QString &httpUrl, const QString &socksUrl)
@@ -200,47 +216,82 @@ void PackageManager::refreshCache()
     m_cancelled = false;
     Q_EMIT started(tr("Loading package lists…"));
 
-    QThreadPool::globalInstance()->start([this] {
-        auto pacmanFuture = QtConcurrent::run([this] { return queryPacman(); });
-        auto flatpakFuture = QtConcurrent::run([this] { return queryFlatpak(); });
-        auto cargoFuture = QtConcurrent::run([this] { return queryCargo(); });
-
+    auto results = std::make_shared<QVector<Package>>();
+    auto mutex = std::make_shared<QMutex>();
+    auto remaining = std::make_shared<std::atomic<int>>(3);
+    auto merge = [this, results, mutex, remaining](QVector<Package> part) {
+        {
+            QMutexLocker locker(mutex.get());
+            results->append(part);
+        }
+        if (remaining->fetch_sub(1) != 1)
+            return;
         QVector<Package> all;
-        all += pacmanFuture.result();
-        all += flatpakFuture.result();
-        all += cargoFuture.result();
-
+        {
+            QMutexLocker locker(mutex.get());
+            all = *results;
+        }
         QMetaObject::invokeMethod(this, [this, all] {
             Q_EMIT packagesLoaded(all);
             Q_EMIT finished(true, tr("Loaded %1 packages").arg(all.size()));
         }, Qt::QueuedConnection);
-    });
+    };
+
+    m_pool->start([this, merge] { merge(queryPacman()); });
+    m_pool->start([this, merge] { merge(queryFlatpak()); });
+    m_pool->start([this, merge] { merge(queryCargo()); });
 }
 
 void PackageManager::refreshUpdates()
 {
     Q_EMIT started(tr("Checking for updates…"));
-    QThreadPool::globalInstance()->start([this] {
-        auto pacmanFuture = QtConcurrent::run([this] { return queryPacmanUpdates(); });
-        auto flatpakFuture = QtConcurrent::run([this] { return flatpakUpdateNames(); });
-        auto cargoFuture = QtConcurrent::run([this] { return cargoUpdateNames(); });
 
-        auto pacman = pacmanFuture.result();
-        auto flatpak = flatpakFuture.result();
-        auto cargo = cargoFuture.result();
-
+    auto pacmanRes = std::make_shared<QSet<QString>>();
+    auto flatpakRes = std::make_shared<QSet<QString>>();
+    auto cargoRes = std::make_shared<QSet<QString>>();
+    auto mutex = std::make_shared<QMutex>();
+    auto remaining = std::make_shared<std::atomic<int>>(3);
+    auto merge = [this, pacmanRes, flatpakRes, cargoRes, mutex,
+                  remaining](int which, QSet<QString> part) {
+        {
+            QMutexLocker locker(mutex.get());
+            switch (which) {
+            case 0:
+                *pacmanRes = part;
+                break;
+            case 1:
+                *flatpakRes = part;
+                break;
+            default:
+                *cargoRes = part;
+                break;
+            }
+        }
+        if (remaining->fetch_sub(1) != 1)
+            return;
+        QSet<QString> pacman, flatpak, cargo;
+        {
+            QMutexLocker locker(mutex.get());
+            pacman = *pacmanRes;
+            flatpak = *flatpakRes;
+            cargo = *cargoRes;
+        }
         QMetaObject::invokeMethod(this, [this, pacman, flatpak, cargo] {
             Q_EMIT updatesReady(pacman, flatpak, cargo);
             Q_EMIT finished(true, tr("Update check finished"));
         }, Qt::QueuedConnection);
-    });
+    };
+
+    m_pool->start([this, merge] { merge(0, queryPacmanUpdates()); });
+    m_pool->start([this, merge] { merge(1, flatpakUpdateNames()); });
+    m_pool->start([this, merge] { merge(2, cargoUpdateNames()); });
 }
 
 void PackageManager::runOperation(const QString &label,
                                   const QVector<Package> &packages, bool installOp)
 {
     Q_EMIT started(label);
-    QThreadPool::globalInstance()->start([this, label, packages, installOp] {
+    m_pool->start([this, label, packages, installOp] {
         QProcessEnvironment env = operationEnvironment();
         bool ok = true;
         QString lastError;

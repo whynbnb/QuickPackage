@@ -15,8 +15,6 @@
 #include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QListView>
-#include <QMenu>
-#include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
@@ -319,19 +317,6 @@ void MainWindow::setupActions()
 
     QAction *quit = KStandardAction::quit(qApp, &QCoreApplication::quit, ac);
     Q_UNUSED(quit);
-
-    QMenu *packageMenu = new QMenu(i18n("&Packages"), this);
-    packageMenu->addAction(refresh);
-    packageMenu->addAction(checkUpdates);
-    packageMenu->addSeparator();
-    packageMenu->addAction(installAction);
-    packageMenu->addAction(removeAction);
-    menuBar()->addMenu(packageMenu);
-
-    QMenu *settingsMenu = new QMenu(i18n("&Settings"), this);
-    settingsMenu->addAction(proxyAction);
-    settingsMenu->addAction(settingsAction);
-    menuBar()->addMenu(settingsMenu);
 }
 
 void MainWindow::refreshFilterProxy()

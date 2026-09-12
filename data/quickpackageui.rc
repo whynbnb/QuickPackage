@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE kpartgui SYSTEM "kpartgui.dtd">
+<gui name="quickpackage" version="1">
+  <MenuBar>
+    <Menu name="file"><text>&amp;File</text>
+      <Action name="file_quit"/>
+    </Menu>
+    <Menu name="packages"><text>&amp;Packages</text>
+      <Action name="refresh_all"/>
+      <Action name="check_updates"/>
+      <Separator/>
+      <Action name="install_selected"/>
+      <Action name="remove_selected"/>
+    </Menu>
+    <Menu name="settings"><text>&amp;Settings</text>
+      <Action name="proxy_settings"/>
+      <Action name="preferences"/>
+    </Menu>
+  </MenuBar>
+</gui>

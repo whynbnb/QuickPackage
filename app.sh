@@ -15,5 +15,13 @@ fi
 echo "==> 编译…"
 cmake --build "$BUILD_DIR" -j"$(nproc)"
 
+# 安装到用户目录,让 KDE 能找到 desktop/notifyrc/kxmlgui 资源文件
+echo "==> 安装资源到 ~/.local …"
+cmake --install "$BUILD_DIR" --prefix "$HOME/.local" >/dev/null
+
 echo "==> 启动 QuickPackage…"
-exec "$BUILD_DIR/quickpackage" "$@"
+if [ -x "$HOME/.local/bin/quickpackage" ]; then
+    exec "$HOME/.local/bin/quickpackage" "$@"
+else
+    exec "$BUILD_DIR/quickpackage" "$@"
+fi

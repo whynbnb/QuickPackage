@@ -7,7 +7,7 @@ Comment[zh_CN]=QuickPackage 软件包管理
 Name=Updates available
 Name[zh_CN]=有可用更新
 IconName=update-none
-Action=Popup|Sound
+Action=Popup
 
 [Event/operation-done]
 Name=Operation finished
@@ -19,5 +19,4 @@ Action=Popup
 Name=Operation failed
 Name[zh_CN]=操作失败
 IconName=dialog-error
-Action=Popup|Sound
-Urgency=2
+Action=Popup

@@ -10,18 +10,25 @@
 
 #include <atomic>
 
+class QThreadPool;
+
 class PackageManager : public QObject
 {
     Q_OBJECT
 
 public:
     explicit PackageManager(QObject *parent = nullptr);
+    ~PackageManager() override;
 
     void refreshCache();
     void refreshUpdates();
     void install(const QVector<PackageModel::Package> &packages);
     void remove(const QVector<PackageModel::Package> &packages);
     void cancel();
+
+    // Cancels pending work and blocks until all pool tasks finished, so no
+    // worker can touch a destroyed PackageManager.
+    void shutdown();
 
     QProcessEnvironment operationEnvironment() const;
 
@@ -51,6 +58,7 @@ private:
                       bool installOp);
 
     QProcessEnvironment m_proxyEnv;
+    QThreadPool *m_pool = nullptr;
     std::atomic<bool> m_cancelled{false};
 };
 
