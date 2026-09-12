@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>org.quickpackage.QuickPackage</id>
+  <name>QuickPackage</name>
+  <summary>KDE-style package manager for pacman, Flatpak and cargo</summary>
+  <summary xml:lang="zh_CN">适配 KDE 风格的 pacman、Flatpak 与 cargo 软件包管理器</summary>
+  <developer_name>QuickPackage contributors</developer_name>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <launchable type="desktop-id">org.quickpackage.QuickPackage.desktop</launchable>
+  <provides>
+    <binary>quickpackage</binary>
+  </provides>
+  <releases>
+    <release version="0.3.0" date="2026-09-12">
+      <description>
+        <p>Initial release with pacman, Flatpak and cargo support, and proxy configuration (HTTP/SOCKS5).</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

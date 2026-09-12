@@ -1,0 +1,468 @@
+#include "MainWindow.h"
+#include "PackageCardDelegate.h"
+#include "ProxyDialog.h"
+#include "SettingsDialog.h"
+#include "UpdateDialog.h"
+
+#include <KActionCollection>
+#include <KConfigGroup>
+#include <KLocalizedString>
+#include <KNotification>
+#include <KSharedConfig>
+#include <KStandardAction>
+#include <QComboBox>
+#include <QCloseEvent>
+#include <QDialogButtonBox>
+#include <QLineEdit>
+#include <QListView>
+#include <QMenuBar>
+#include <QMenu>
+#include <QMessageBox>
+#include <QProgressBar>
+#include <QPushButton>
+#include <QSortFilterProxyModel>
+#include <QStatusBar>
+#include <QTimer>
+#include <QVBoxLayout>
+
+using Package = PackageModel::Package;
+
+namespace {
+constexpr int BackendAll = -1;
+
+QString backendLabel(PackageModel::Backend backend)
+{
+    switch (backend) {
+    case PackageModel::Backend::Pacman:
+        return i18n("Pacman");
+    case PackageModel::Backend::Flatpak:
+        return i18n("Flatpak");
+    case PackageModel::Backend::Cargo:
+        return i18n("Cargo");
+    }
+    return {};
+}
+} // namespace
+
+class MainWindow::PackageFilterProxyModel : public QSortFilterProxyModel
+{
+public:
+    void applyFilter(const QString &text, int backendFilter)
+    {
+        searchText = text;
+        backend = backendFilter;
+        invalidateFilter();
+    }
+
+    QString searchText;
+    int backend = BackendAll;
+
+    bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
+    {
+        const QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
+        if (backend != BackendAll
+            && index.data(PackageModel::BackendRole).toInt() != backend)
+            return false;
+        if (searchText.isEmpty())
+            return true;
+        const QString name = index.data(PackageModel::NameRole).toString();
+        const QString description = index.data(PackageModel::DescriptionRole).toString();
+        return name.contains(searchText, Qt::CaseInsensitive)
+            || description.contains(searchText, Qt::CaseInsensitive);
+    }
+};
+
+MainWindow::MainWindow(QWidget *parent)
+    : KXmlGuiWindow(parent)
+    , m_manager(this)
+    , m_proxy(this)
+{
+    m_proxy.load();
+    m_model = new PackageModel(this);
+    m_filterProxy = new PackageFilterProxyModel;
+    m_filterProxy->setSourceModel(m_model);
+
+    setupUi();
+    setupActions();
+    setupGUI();
+
+    connect(&m_manager, &PackageManager::started, this, [this](const QString &message) {
+        setBusy(true, message);
+    });
+    connect(&m_manager, &PackageManager::progress, this,
+            [this](const QString &message) { m_statusLabel->setText(message); });
+    connect(&m_manager, &PackageManager::packagesLoaded, this,
+            [this](const QVector<Package> &packages) {
+                m_model->setPackages(packages);
+                if (m_updatesLoaded) {
+                    for (const QString &name : std::as_const(m_pacmanUpdates))
+                        m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
+                                                     PackageModel::Status::NeedsUpdate);
+                    for (const QString &name : std::as_const(m_flatpakUpdates))
+                        m_model->updatePackageStatus(name, PackageModel::Backend::Flatpak,
+                                                     PackageModel::Status::NeedsUpdate);
+                    for (const QString &name : std::as_const(m_cargoUpdates))
+                        m_model->updatePackageStatus(name, PackageModel::Backend::Cargo,
+                                                     PackageModel::Status::NeedsUpdate);
+                }
+                updateCounters();
+            });
+    connect(&m_manager, &PackageManager::updatesReady, this,
+            [this](const QSet<QString> &pacman, const QSet<QString> &flatpak,
+                   const QSet<QString> &cargo) {
+                m_pacmanUpdates = pacman;
+                m_flatpakUpdates = flatpak;
+                m_cargoUpdates = cargo;
+                m_updatesLoaded = true;
+
+                for (const QString &name : std::as_const(m_pacmanUpdates))
+                    m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
+                                                 PackageModel::Status::NeedsUpdate);
+                for (const QString &name : std::as_const(m_flatpakUpdates))
+                    m_model->updatePackageStatus(name, PackageModel::Backend::Flatpak,
+                                                 PackageModel::Status::NeedsUpdate);
+                for (const QString &name : std::as_const(m_cargoUpdates))
+                    m_model->updatePackageStatus(name, PackageModel::Backend::Cargo,
+                                                 PackageModel::Status::NeedsUpdate);
+
+                const int count = m_model->updateCount();
+                m_updatesButton->setEnabled(count > 0);
+                updateCounters();
+                if (count > 0) {
+                    notify(QStringLiteral("update-available"),
+                           i18n("Updates available"),
+                           i18np("1 update is available", "%1 updates are available",
+                                 count));
+                    m_statusLabel->setText(i18n("%1 updates available", count));
+                } else {
+                    m_statusLabel->setText(i18n("All packages are up to date"));
+                }
+            });
+    connect(&m_manager, &PackageManager::finished, this, [this](bool ok, const QString &message) {
+        setBusy(false);
+        if (!message.isEmpty())
+            m_statusLabel->setText(message);
+        if (ok)
+            notify(QStringLiteral("operation-done"), i18n("Operation finished"), message);
+        else
+            notify(QStringLiteral("operation-failed"), i18n("Operation failed"), message);
+    });
+
+    KConfigGroup group =
+        KSharedConfig::openConfig(QStringLiteral("quickpackagerc"))->group(QStringLiteral("General"));
+    m_loadOnStart = group.readEntry("CheckUpdatesOnStart", true);
+    QTimer::singleShot(600, this, [this] {
+        m_manager.refreshCache();
+        if (m_loadOnStart)
+            m_manager.refreshUpdates();
+    });
+}
+
+MainWindow::~MainWindow() = default;
+
+void MainWindow::setupUi()
+{
+    auto *central = new QWidget(this);
+    auto *layout = new QVBoxLayout(central);
+    layout->setContentsMargins(12, 12, 12, 12);
+    layout->setSpacing(10);
+
+    auto *topBar = new QHBoxLayout;
+    topBar->setSpacing(8);
+
+    m_searchEdit = new QLineEdit(central);
+    m_searchEdit->setClearButtonEnabled(true);
+    m_searchEdit->setPlaceholderText(i18n("Search packages…"));
+    topBar->addWidget(m_searchEdit, 1);
+
+    m_backendCombo = new QComboBox(central);
+    m_backendCombo->addItem(i18n("All"), BackendAll);
+    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Pacman),
+                            int(PackageModel::Backend::Pacman));
+    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Flatpak),
+                            int(PackageModel::Backend::Flatpak));
+    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Cargo),
+                            int(PackageModel::Backend::Cargo));
+    topBar->addWidget(m_backendCombo);
+
+    m_refreshButton = new QPushButton(i18n("Refresh"), central);
+    m_refreshButton->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+    topBar->addWidget(m_refreshButton);
+
+    m_updatesButton = new QPushButton(i18n("Updates"), central);
+    m_updatesButton->setIcon(QIcon::fromTheme(QStringLiteral("update-none")));
+    topBar->addWidget(m_updatesButton);
+
+    layout->addLayout(topBar);
+
+    m_listView = new QListView(central);
+    m_listView->setModel(m_filterProxy);
+    m_listView->setItemDelegate(new PackageCardDelegate(m_listView));
+    m_listView->setSelectionMode(QAbstractItemView::NoSelection);
+    m_listView->setUniformItemSizes(false);
+    m_listView->setMouseTracking(true);
+    m_listView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
+    layout->addWidget(m_listView, 1);
+
+    auto *bottomBar = new QHBoxLayout;
+    bottomBar->setSpacing(8);
+
+    m_installButton = new QPushButton(i18n("Install"), central);
+    m_installButton->setIcon(QIcon::fromTheme(QStringLiteral("list-add")));
+    bottomBar->addWidget(m_installButton);
+
+    m_removeButton = new QPushButton(i18n("Remove"), central);
+    m_removeButton->setIcon(QIcon::fromTheme(QStringLiteral("list-remove")));
+    bottomBar->addWidget(m_removeButton);
+
+    m_countLabel = new QLabel(central);
+    m_countLabel->setAlignment(Qt::AlignRight | Qt::AlignVCenter);
+    bottomBar->addStretch();
+    bottomBar->addWidget(m_countLabel);
+
+    layout->addLayout(bottomBar);
+    setCentralWidget(central);
+
+    m_statusLabel = new QLabel(i18n("Ready"), this);
+    statusBar()->addWidget(m_statusLabel, 1);
+
+    m_progressBar = new QProgressBar(this);
+    m_progressBar->setMaximumWidth(220);
+    m_progressBar->setTextVisible(false);
+    m_progressBar->setRange(0, 0);
+    m_progressBar->hide();
+    statusBar()->addPermanentWidget(m_progressBar);
+
+    connect(m_searchEdit, &QLineEdit::textChanged, this,
+            [this](const QString &) { refreshFilterProxy(); });
+    connect(m_backendCombo, &QComboBox::currentIndexChanged, this,
+            [this](int index) { Q_UNUSED(index); refreshFilterProxy(); });
+    connect(m_refreshButton, &QPushButton::clicked, this,
+            [this] { m_manager.refreshCache(); });
+    connect(m_updatesButton, &QPushButton::clicked, this,
+            [this] { m_manager.refreshUpdates(); });
+    connect(m_installButton, &QPushButton::clicked, this,
+            [this] { installSelected(); });
+    connect(m_removeButton, &QPushButton::clicked, this,
+            [this] { removeSelected(); });
+    connect(m_model, &PackageModel::dataChanged, this, [this] { updateCounters(); });
+    connect(m_model, &PackageModel::modelReset, this, [this] { updateCounters(); });
+
+    auto *delegate = static_cast<PackageCardDelegate *>(m_listView->itemDelegate());
+    connect(delegate, &PackageCardDelegate::selectionToggled, this,
+            [this](const QModelIndex &proxyIndex, bool checked) {
+                const QModelIndex index = m_filterProxy->mapToSource(proxyIndex);
+                m_model->setSelected(index.data(PackageModel::NameRole).toString(),
+                                     static_cast<PackageModel::Backend>(
+                                         index.data(PackageModel::BackendRole).toInt()),
+                                     checked);
+            });
+}
+
+void MainWindow::setupActions()
+{
+    KActionCollection *ac = actionCollection();
+
+    QAction *refresh = ac->addAction(QStringLiteral("refresh_all"));
+    refresh->setText(i18n("Refresh Lists"));
+    refresh->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
+    ac->setDefaultShortcut(refresh, QKeySequence(Qt::Key_F5));
+    connect(refresh, &QAction::triggered, this, [this] { m_manager.refreshCache(); });
+
+    QAction *checkUpdates = ac->addAction(QStringLiteral("check_updates"));
+    checkUpdates->setText(i18n("Check for Updates"));
+    checkUpdates->setIcon(QIcon::fromTheme(QStringLiteral("update-none")));
+    ac->setDefaultShortcut(checkUpdates, QKeySequence(QStringLiteral("Ctrl+U")));
+    connect(checkUpdates, &QAction::triggered, this,
+            [this] { m_manager.refreshUpdates(); });
+
+    QAction *installAction = ac->addAction(QStringLiteral("install_selected"));
+    installAction->setText(i18n("Install Selected"));
+    installAction->setIcon(QIcon::fromTheme(QStringLiteral("list-add")));
+    ac->setDefaultShortcut(installAction, QKeySequence(QStringLiteral("Ctrl+I")));
+    connect(installAction, &QAction::triggered, this, [this] { installSelected(); });
+
+    QAction *removeAction = ac->addAction(QStringLiteral("remove_selected"));
+    removeAction->setText(i18n("Remove Selected"));
+    removeAction->setIcon(QIcon::fromTheme(QStringLiteral("list-remove")));
+    ac->setDefaultShortcut(removeAction, QKeySequence(Qt::Key_Delete));
+    connect(removeAction, &QAction::triggered, this, [this] { removeSelected(); });
+
+    QAction *proxyAction = ac->addAction(QStringLiteral("proxy_settings"));
+    proxyAction->setText(i18n("Configure Proxy…"));
+    proxyAction->setIcon(QIcon::fromTheme(QStringLiteral("network-proxy")));
+    connect(proxyAction, &QAction::triggered, this, [this] { showProxyDialog(); });
+
+    QAction *settingsAction = ac->addAction(QStringLiteral("preferences"));
+    settingsAction->setText(i18n("Preferences…"));
+    settingsAction->setIcon(QIcon::fromTheme(QStringLiteral("configure")));
+    ac->setDefaultShortcut(settingsAction, QKeySequence(QStringLiteral("Ctrl+Shift+,")));
+    connect(settingsAction, &QAction::triggered, this, [this] { showSettingsDialog(); });
+
+    QAction *quit = KStandardAction::quit(qApp, &QCoreApplication::quit, ac);
+    Q_UNUSED(quit);
+
+    QMenu *packageMenu = new QMenu(i18n("&Packages"), this);
+    packageMenu->addAction(refresh);
+    packageMenu->addAction(checkUpdates);
+    packageMenu->addSeparator();
+    packageMenu->addAction(installAction);
+    packageMenu->addAction(removeAction);
+    menuBar()->addMenu(packageMenu);
+
+    QMenu *settingsMenu = new QMenu(i18n("&Settings"), this);
+    settingsMenu->addAction(proxyAction);
+    settingsMenu->addAction(settingsAction);
+    menuBar()->addMenu(settingsMenu);
+}
+
+void MainWindow::refreshFilterProxy()
+{
+    m_filterProxy->applyFilter(m_searchEdit->text().trimmed(),
+                               m_backendCombo->currentData().toInt());
+}
+
+void MainWindow::updateCounters()
+{
+    const int selected = m_model->selectedCount();
+    const int updates = m_model->updateCount();
+    m_countLabel->setText(i18n("%1 selected · %2 updates", selected, updates));
+    m_installButton->setEnabled(selected > 0);
+    m_removeButton->setEnabled(selected > 0);
+    m_updatesButton->setEnabled(updates > 0);
+}
+
+void MainWindow::setBusy(bool busy, const QString &message)
+{
+    if (busy) {
+        ++m_busyDepth;
+        m_progressBar->show();
+        if (!message.isEmpty())
+            m_statusLabel->setText(message);
+    } else {
+        m_busyDepth = qMax(0, m_busyDepth - 1);
+        if (m_busyDepth == 0)
+            m_progressBar->hide();
+    }
+    const bool locked = m_busyDepth > 0;
+    m_listView->setEnabled(!locked);
+    m_refreshButton->setEnabled(!locked);
+    m_searchEdit->setEnabled(!locked);
+    m_backendCombo->setEnabled(!locked);
+    if (locked) {
+        m_installButton->setEnabled(false);
+        m_removeButton->setEnabled(false);
+        m_updatesButton->setEnabled(false);
+    } else {
+        updateCounters();
+    }
+}
+
+void MainWindow::installSelected()
+{
+    const QVector<Package> packages = m_model->selectedPackages();
+    if (packages.isEmpty())
+        return;
+    QStringList names;
+    for (const Package &pkg : packages)
+        names << pkg.name;
+    const auto answer = QMessageBox::question(
+        this, i18n("Install Packages"),
+        i18np("Install the following package?", "Install the following %1 packages?",
+              packages.size())
+            + QStringLiteral("\n\n") + names.join(QStringLiteral(", ")),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+        return;
+    m_manager.install(packages);
+}
+
+void MainWindow::removeSelected()
+{
+    const QVector<Package> packages = m_model->selectedPackages();
+    if (packages.isEmpty())
+        return;
+    QStringList names;
+    for (const Package &pkg : packages)
+        names << pkg.name;
+    const auto answer = QMessageBox::question(
+        this, i18n("Remove Packages"),
+        i18np("Remove the following package?", "Remove the following %1 packages?",
+              packages.size())
+            + QStringLiteral("\n\n") + names.join(QStringLiteral(", ")),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel);
+    if (answer != QMessageBox::Yes)
+        return;
+    m_manager.remove(packages);
+}
+
+void MainWindow::showUpdateDialog()
+{
+    QVector<Package> updates;
+    const int rows = m_model->rowCount();
+    for (int row = 0; row < rows; ++row) {
+        const QModelIndex index = m_model->index(row);
+        if (static_cast<PackageModel::Status>(index.data(PackageModel::StatusRole).toInt())
+            == PackageModel::Status::NeedsUpdate) {
+            Package pkg;
+            pkg.name = index.data(PackageModel::NameRole).toString();
+            pkg.version = index.data(PackageModel::VersionRole).toString();
+            pkg.newVersion = index.data(PackageModel::NewVersionRole).toString();
+            pkg.backend = static_cast<PackageModel::Backend>(
+                index.data(PackageModel::BackendRole).toInt());
+            updates.append(pkg);
+        }
+    }
+
+    UpdateDialog dialog(updates, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        const QVector<Package> checked = dialog.checkedPackages();
+        if (checked.isEmpty())
+            return;
+        m_model->clearSelection();
+        for (const Package &pkg : checked)
+            m_model->setSelected(pkg.name, pkg.backend, true);
+        installSelected();
+    }
+}
+
+void MainWindow::showProxyDialog()
+{
+    ProxyDialog dialog(&m_proxy, this);
+    if (dialog.exec() == QDialog::Accepted) {
+        const QString url = m_proxy.url();
+        m_manager.setProxy(url, url);
+        if (url.isEmpty())
+            m_statusLabel->setText(i18n("Proxy disabled"));
+        else
+            m_statusLabel->setText(i18nc("@info:status Proxy summary", "Proxy: %1", url));
+    }
+}
+
+void MainWindow::showSettingsDialog()
+{
+    SettingsDialog dialog(this);
+    dialog.exec();
+}
+
+void MainWindow::notify(const QString &eventId, const QString &title, const QString &text)
+{
+    KNotification::event(eventId, title, text, QStringLiteral("quickpackage"),
+                         KNotification::CloseOnTimeout, QStringLiteral("quickpackage"));
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    if (m_busyDepth > 0) {
+        const auto answer = QMessageBox::question(
+            this, i18n("Operation in Progress"),
+            i18n("An operation is still running. Quit anyway?"),
+            QMessageBox::Yes | QMessageBox::No, QMessageBox::No);
+        if (answer != QMessageBox::Yes) {
+            event->ignore();
+            return;
+        }
+        m_manager.cancel();
+    }
+    event->accept();
+}

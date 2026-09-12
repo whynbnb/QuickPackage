@@ -1,0 +1,23 @@
+[Global]
+IconName=quickpackage
+Comment=QuickPackage
+Comment[zh_CN]=QuickPackage 软件包管理
+
+[Event/update-available]
+Name=Updates available
+Name[zh_CN]=有可用更新
+IconName=update-none
+Action=Popup|Sound
+
+[Event/operation-done]
+Name=Operation finished
+Name[zh_CN]=操作完成
+IconName=dialog-information
+Action=Popup
+
+[Event/operation-failed]
+Name=Operation failed
+Name[zh_CN]=操作失败
+IconName=dialog-error
+Action=Popup|Sound
+Urgency=2
