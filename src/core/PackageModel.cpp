@@ -1,5 +1,7 @@
 #include "PackageModel.h"
 
+#include <KLocalizedString>
+
 PackageModel::PackageModel(QObject *parent)
     : QAbstractListModel(parent)
 {
@@ -169,15 +171,15 @@ QString PackageModel::statusText(Status status)
     case Status::Idle:
         return QString();
     case Status::Installed:
-        return QObject::tr("Installed");
+        return i18n("Installed");
     case Status::Updating:
-        return QObject::tr("Updating…");
+        return i18n("Updating…");
     case Status::Removing:
-        return QObject::tr("Removing…");
+        return i18n("Removing…");
     case Status::Failed:
-        return QObject::tr("Failed");
+        return i18n("Failed");
     case Status::NeedsUpdate:
-        return QObject::tr("Update available");
+        return i18n("Update available");
     }
     return {};
 }

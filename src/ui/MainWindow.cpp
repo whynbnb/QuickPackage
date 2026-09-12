@@ -5,6 +5,7 @@
 #include "UpdateDialog.h"
 
 #include <KActionCollection>
+#include <KColorSchemeManager>
 #include <KConfigGroup>
 #include <KLocalizedString>
 #include <KNotification>
@@ -161,6 +162,17 @@ MainWindow::MainWindow(QWidget *parent)
 
     KConfigGroup group =
         KSharedConfig::openConfig(QStringLiteral("quickpackagerc"))->group(QStringLiteral("General"));
+
+    // Apply the saved color scheme (system / light / dark)
+    m_schemeManager = new KColorSchemeManager(this);
+    const QString theme = group.readEntry(QStringLiteral("Theme"), QStringLiteral("system"));
+    if (theme == QLatin1String("light"))
+        m_schemeManager->activateSchemeId(QStringLiteral("BreezeLight"));
+    else if (theme == QLatin1String("dark"))
+        m_schemeManager->activateSchemeId(QStringLiteral("BreezeDark"));
+    else
+        m_schemeManager->activateSchemeId(QString());
+
     m_loadOnStart = group.readEntry("CheckUpdatesOnStart", true);
     QTimer::singleShot(600, this, [this] {
         m_manager.refreshCache();
@@ -483,7 +495,7 @@ void MainWindow::showProxyDialog()
 
 void MainWindow::showSettingsDialog()
 {
-    SettingsDialog dialog(this);
+    SettingsDialog dialog(m_schemeManager, this);
     dialog.exec();
 }
 

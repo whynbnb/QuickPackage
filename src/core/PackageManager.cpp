@@ -1,5 +1,6 @@
 #include "PackageManager.h"
 
+#include <KLocalizedString>
 #include <QDir>
 #include <QFile>
 #include <QMutex>
@@ -219,7 +220,7 @@ QSet<QString> PackageManager::cargoUpdateNames()
 void PackageManager::refreshCache()
 {
     m_cancelled = false;
-    Q_EMIT started(tr("Loading package lists…"));
+    Q_EMIT started(i18n("Loading package lists…"));
 
     auto results = std::make_shared<QVector<Package>>();
     auto mutex = std::make_shared<QMutex>();
@@ -238,7 +239,7 @@ void PackageManager::refreshCache()
         }
         QMetaObject::invokeMethod(this, [this, all] {
             Q_EMIT packagesLoaded(all);
-            Q_EMIT finished(true, tr("Loaded %1 packages").arg(all.size()));
+            Q_EMIT finished(true, i18n("Loaded %1 packages").arg(all.size()));
         }, Qt::QueuedConnection);
     };
 
@@ -249,7 +250,7 @@ void PackageManager::refreshCache()
 
 void PackageManager::refreshUpdates()
 {
-    Q_EMIT started(tr("Checking for updates…"));
+    Q_EMIT started(i18n("Checking for updates…"));
 
     auto pacmanRes = std::make_shared<QSet<QString>>();
     auto flatpakRes = std::make_shared<QSet<QString>>();
@@ -283,7 +284,7 @@ void PackageManager::refreshUpdates()
         }
         QMetaObject::invokeMethod(this, [this, pacman, flatpak, cargo] {
             Q_EMIT updatesReady(pacman, flatpak, cargo);
-            Q_EMIT finished(true, tr("Update check finished"));
+            Q_EMIT finished(true, i18n("Update check finished"));
         }, Qt::QueuedConnection);
     };
 
@@ -304,7 +305,7 @@ void PackageManager::runOperation(const QString &label,
         for (const Package &pkg : packages) {
             if (m_cancelled) {
                 ok = false;
-                lastError = tr("Cancelled");
+                lastError = i18n("Cancelled");
                 break;
             }
             // The command line needs the concrete package id (Flatpak app id),
@@ -333,16 +334,16 @@ void PackageManager::runOperation(const QString &label,
                     args << QStringLiteral("cargo") << QStringLiteral("uninstall") << id;
             }
 
-            Q_EMIT progress(installOp ? tr("Installing %1…").arg(pkgLabel)
-                                     : tr("Removing %1…").arg(pkgLabel));
+            Q_EMIT progress(installOp ? i18n("Installing %1…").arg(pkgLabel)
+                                     : i18n("Removing %1…").arg(pkgLabel));
             QString output;
             if (!runCommand(args, env, &output, 1800000)) {
                 ok = false;
-                lastError = tr("%1: %2").arg(pkgLabel, output.right(400));
-                Q_EMIT progress(tr("Failed: %1").arg(pkgLabel));
+                lastError = i18n("%1: %2").arg(pkgLabel, output.right(400));
+                Q_EMIT progress(i18n("Failed: %1").arg(pkgLabel));
                 continue;
             }
-            Q_EMIT progress(tr("Done: %1").arg(pkgLabel));
+            Q_EMIT progress(i18n("Done: %1").arg(pkgLabel));
         }
         const bool wasOk = ok;
         const QString err = lastError;
@@ -354,12 +355,12 @@ void PackageManager::runOperation(const QString &label,
 
 void PackageManager::install(const QVector<Package> &packages)
 {
-    runOperation(tr("Installing selected packages…"), packages, true);
+    runOperation(i18n("Installing selected packages…"), packages, true);
 }
 
 void PackageManager::remove(const QVector<Package> &packages)
 {
-    runOperation(tr("Removing selected packages…"), packages, false);
+    runOperation(i18n("Removing selected packages…"), packages, false);
 }
 
 void PackageManager::cancel()

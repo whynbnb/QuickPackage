@@ -17,6 +17,8 @@ class QProgressBar;
 class QPushButton;
 class QToolButton;
 
+class KColorSchemeManager;
+
 class MainWindow : public KXmlGuiWindow
 {
     Q_OBJECT
@@ -52,6 +54,7 @@ private:
     QListView *m_listView = nullptr;
     QLineEdit *m_searchEdit = nullptr;
     QButtonGroup *m_backendGroup = nullptr;
+    KColorSchemeManager *m_schemeManager = nullptr;
     QToolButton *m_btnAll = nullptr;
     QToolButton *m_btnPacman = nullptr;
     QToolButton *m_btnFlatpak = nullptr;

@@ -17,6 +17,7 @@ find_package(KF6Notifications REQUIRED)
 find_package(KF6IconThemes REQUIRED)
 find_package(KF6XmlGui REQUIRED)
 find_package(KF6WidgetsAddons REQUIRED)
+find_package(KF6ColorScheme REQUIRED)
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
 
@@ -45,7 +46,17 @@ target_link_libraries(quickpackage PRIVATE
     KF6::IconThemes
     KF6::XmlGui
     KF6::WidgetsAddons
+    KF6::ColorScheme
 )
+
+# Compile the Chinese translation catalog
+add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/quickpackage.mo
+    COMMAND msgfmt --check -o ${CMAKE_CURRENT_BINARY_DIR}/quickpackage.mo
+            ${CMAKE_CURRENT_SOURCE_DIR}/translations/quickpackage.po
+    DEPENDS translations/quickpackage.po
+    COMMENT "Compiling zh_CN translation catalog"
+)
+add_custom_target(translations ALL DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/quickpackage.mo)
 
 target_compile_options(quickpackage PRIVATE -Wall -Wextra)
 
@@ -58,3 +69,5 @@ install(FILES data/quickpackage.notifyrc
         DESTINATION ${CMAKE_INSTALL_DATADIR}/knotifications6)
 install(FILES data/quickpackageui.rc
         DESTINATION ${CMAKE_INSTALL_DATADIR}/kxmlgui5/quickpackage)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/quickpackage.mo
+        DESTINATION ${CMAKE_INSTALL_DATADIR}/locale/zh_CN/LC_MESSAGES)

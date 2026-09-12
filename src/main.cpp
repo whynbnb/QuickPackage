@@ -5,9 +5,30 @@
 #include <QApplication>
 #include <QCommandLineParser>
 #include <QIcon>
+#include <QLocale>
+#include <QSettings>
+#include <QStandardPaths>
 
 int main(int argc, char *argv[])
 {
+    // Apply the language preference before the application is created; ki18n
+    // reads the LANGUAGE environment variable when loading catalogs.
+    const QString cfgPath =
+        QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation)
+        + QStringLiteral("/quickpackagerc");
+    const QSettings preSettings(cfgPath, QSettings::IniFormat);
+    const QString language = preSettings
+                                 .value(QStringLiteral("General/Language"),
+                                        QStringLiteral("system"))
+                                 .toString();
+    if (language == QLatin1String("en")) {
+        qputenv("LANGUAGE", "en");
+        QLocale::setDefault(QLocale(QLocale::English));
+    } else if (language == QLatin1String("zh_CN")) {
+        qputenv("LANGUAGE", "zh_CN");
+        QLocale::setDefault(QLocale(QLocale::Chinese, QLocale::China));
+    }
+
     QApplication app(argc, argv);
     KLocalizedString::setApplicationDomain("quickpackage");
 
