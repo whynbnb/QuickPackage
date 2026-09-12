@@ -37,6 +37,8 @@ QVariant PackageModel::data(const QModelIndex &index, int role) const
         return pkg.origin;
     case OriginRole:
         return pkg.origin;
+    case PackageIdRole:
+        return pkg.packageId;
     default:
         return {};
     }
@@ -54,7 +56,8 @@ QHash<int, QByteArray> PackageModel::roleNames() const
         {IsInstalledRole, "installed"},
         {IsSelectedRole, "selected"},
         {SizeRole, "size"},
-        {OriginRole, "origin"}};
+        {OriginRole, "origin"},
+        {PackageIdRole, "packageId"}};
 }
 
 void PackageModel::setPackages(const QVector<Package> &packages)
@@ -63,15 +66,16 @@ void PackageModel::setPackages(const QVector<Package> &packages)
     m_packages = packages;
     m_keys.clear();
     for (const Package &pkg : std::as_const(m_packages))
-        m_keys.insert({pkg.name, static_cast<int>(pkg.backend)});
+        m_keys.insert({pkg.packageId.isEmpty() ? pkg.name : pkg.packageId,
+                       static_cast<int>(pkg.backend)});
     endResetModel();
 }
 
-void PackageModel::updatePackageStatus(const QString &name, Backend backend, Status status)
+void PackageModel::updatePackageStatus(const QString &nameOrId, Backend backend, Status status)
 {
     for (int row = 0; row < m_packages.size(); ++row) {
         Package &pkg = m_packages[row];
-        if (pkg.name == name && pkg.backend == backend) {
+        if ((pkg.name == nameOrId || pkg.packageId == nameOrId) && pkg.backend == backend) {
             pkg.status = status;
             if (status == Status::Installed)
                 pkg.installed = true;
@@ -81,12 +85,12 @@ void PackageModel::updatePackageStatus(const QString &name, Backend backend, Sta
     }
 }
 
-void PackageModel::setPackageInstalled(const QString &name, Backend backend, bool installed,
+void PackageModel::setPackageInstalled(const QString &nameOrId, Backend backend, bool installed,
                                        const QString &version)
 {
     for (int row = 0; row < m_packages.size(); ++row) {
         Package &pkg = m_packages[row];
-        if (pkg.name == name && pkg.backend == backend) {
+        if ((pkg.name == nameOrId || pkg.packageId == nameOrId) && pkg.backend == backend) {
             pkg.installed = installed;
             pkg.status = installed ? Status::Installed : Status::Idle;
             if (!version.isEmpty())
@@ -97,11 +101,11 @@ void PackageModel::setPackageInstalled(const QString &name, Backend backend, boo
     }
 }
 
-void PackageModel::setSelected(const QString &name, Backend backend, bool selected)
+void PackageModel::setSelected(const QString &nameOrId, Backend backend, bool selected)
 {
     for (int row = 0; row < m_packages.size(); ++row) {
         Package &pkg = m_packages[row];
-        if (pkg.name == name && pkg.backend == backend) {
+        if ((pkg.name == nameOrId || pkg.packageId == nameOrId) && pkg.backend == backend) {
             pkg.selected = selected;
             Q_EMIT dataChanged(index(row), index(row));
             return;

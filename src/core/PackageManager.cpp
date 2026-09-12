@@ -101,6 +101,7 @@ QVector<Package> PackageManager::queryPacman()
             continue;
         Package pkg;
         pkg.name = line.left(sp);
+        pkg.packageId = pkg.name;
         pkg.version = line.mid(sp + 1).trimmed();
         pkg.backend = Backend::Pacman;
         pkg.installed = true;
@@ -115,7 +116,7 @@ QVector<Package> PackageManager::queryFlatpak()
     QVector<Package> result;
     QString output;
     if (!runCommand({QStringLiteral("flatpak"), QStringLiteral("list"), QStringLiteral("--app"),
-                     QStringLiteral("--columns=application,version,origin,description")},
+                     QStringLiteral("--columns=application,name,version,origin,description")},
                     operationEnvironment(), &output))
         return result;
     for (const QString &line : output.split(u'\n')) {
@@ -123,10 +124,13 @@ QVector<Package> PackageManager::queryFlatpak()
         if (cols.isEmpty() || cols.first().isEmpty())
             continue;
         Package pkg;
-        pkg.name = cols.value(0);
-        pkg.version = cols.value(1);
-        pkg.origin = cols.value(2);
-        pkg.description = cols.value(3);
+        pkg.packageId = cols.value(0);
+        pkg.name = cols.value(1);
+        if (pkg.name.isEmpty())
+            pkg.name = pkg.packageId;
+        pkg.version = cols.value(2);
+        pkg.origin = cols.value(3);
+        pkg.description = cols.value(4);
         pkg.backend = Backend::Flatpak;
         pkg.installed = true;
         result.append(pkg);
@@ -151,6 +155,7 @@ QVector<Package> PackageManager::queryCargo()
             if (match.hasMatch()) {
                 Package pkg;
                 pkg.name = match.captured(1);
+                pkg.packageId = pkg.name;
                 pkg.version = match.captured(2);
                 pkg.backend = Backend::Cargo;
                 pkg.installed = true;
@@ -302,27 +307,30 @@ void PackageManager::runOperation(const QString &label,
                 lastError = tr("Cancelled");
                 break;
             }
+            // The command line needs the concrete package id (Flatpak app id),
+            // not the display name.
+            const QString id = pkg.packageId.isEmpty() ? pkg.name : pkg.packageId;
             QStringList args;
-            QString pkgLabel = pkg.name;
+            const QString pkgLabel = pkg.name;
             if (pkg.backend == Backend::Pacman) {
                 if (installOp)
                     args << QStringLiteral("sudo") << QStringLiteral("pacman")
-                         << QStringLiteral("-S") << QStringLiteral("--noconfirm") << pkg.name;
+                         << QStringLiteral("-S") << QStringLiteral("--noconfirm") << id;
                 else
                     args << QStringLiteral("sudo") << QStringLiteral("pacman")
-                         << QStringLiteral("-Rns") << QStringLiteral("--noconfirm") << pkg.name;
+                         << QStringLiteral("-Rns") << QStringLiteral("--noconfirm") << id;
             } else if (pkg.backend == Backend::Flatpak) {
                 if (installOp)
                     args << QStringLiteral("flatpak") << QStringLiteral("install")
-                         << QStringLiteral("-y") << pkg.name;
+                         << QStringLiteral("-y") << id;
                 else
                     args << QStringLiteral("flatpak") << QStringLiteral("uninstall")
-                         << QStringLiteral("-y") << pkg.name;
+                         << QStringLiteral("-y") << id;
             } else {
                 if (installOp)
-                    args << QStringLiteral("cargo") << QStringLiteral("install") << pkg.name;
+                    args << QStringLiteral("cargo") << QStringLiteral("install") << id;
                 else
-                    args << QStringLiteral("cargo") << QStringLiteral("uninstall") << pkg.name;
+                    args << QStringLiteral("cargo") << QStringLiteral("uninstall") << id;
             }
 
             Q_EMIT progress(installOp ? tr("Installing %1…").arg(pkgLabel)

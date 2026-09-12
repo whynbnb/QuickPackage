@@ -28,11 +28,13 @@ public:
         IsInstalledRole,
         IsSelectedRole,
         SizeRole,
-        OriginRole
+        OriginRole,
+        PackageIdRole
     };
 
     struct Package {
         QString name;
+        QString packageId;
         QString version;
         QString newVersion;
         QString description;
@@ -50,10 +52,10 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setPackages(const QVector<Package> &packages);
-    void updatePackageStatus(const QString &name, Backend backend, Status status);
-    void setPackageInstalled(const QString &name, Backend backend, bool installed,
+    void updatePackageStatus(const QString &nameOrId, Backend backend, Status status);
+    void setPackageInstalled(const QString &nameOrId, Backend backend, bool installed,
                              const QString &version = {});
-    void setSelected(const QString &name, Backend backend, bool selected);
+    void setSelected(const QString &nameOrId, Backend backend, bool selected);
     void clearSelection();
     QVector<Package> selectedPackages() const;
     int selectedCount() const;

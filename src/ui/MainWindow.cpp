@@ -66,8 +66,10 @@ public:
         if (searchText.isEmpty())
             return true;
         const QString name = index.data(PackageModel::NameRole).toString();
+        const QString packageId = index.data(PackageModel::PackageIdRole).toString();
         const QString description = index.data(PackageModel::DescriptionRole).toString();
         return name.contains(searchText, Qt::CaseInsensitive)
+            || packageId.contains(searchText, Qt::CaseInsensitive)
             || description.contains(searchText, Qt::CaseInsensitive);
     }
 };
@@ -445,6 +447,7 @@ void MainWindow::showUpdateDialog()
             == PackageModel::Status::NeedsUpdate) {
             Package pkg;
             pkg.name = index.data(PackageModel::NameRole).toString();
+            pkg.packageId = index.data(PackageModel::PackageIdRole).toString();
             pkg.version = index.data(PackageModel::VersionRole).toString();
             pkg.newVersion = index.data(PackageModel::NewVersionRole).toString();
             pkg.backend = static_cast<PackageModel::Backend>(

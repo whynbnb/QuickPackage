@@ -220,9 +220,13 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
                           fm.elidedText(text, Qt::ElideRight, verRect.width()));
     }
 
-    // Description row, prefixed with the concrete origin when available
+    // Description row, prefixed with the concrete id and origin
     const QString origin = index.data(PackageModel::OriginRole).toString();
+    const QString packageId = index.data(PackageModel::PackageIdRole).toString();
     QString descText = description;
+    if (!packageId.isEmpty() && packageId != name)
+        descText = descText.isEmpty() ? packageId
+                                      : QStringLiteral("%1 · %2").arg(packageId, descText);
     if (!origin.isEmpty())
         descText = descText.isEmpty() ? origin
                                       : QStringLiteral("%1 · %2").arg(origin, descText);
