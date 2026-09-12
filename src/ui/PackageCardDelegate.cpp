@@ -110,7 +110,29 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     QFontMetrics fmName(nameFont);
     QFontMetrics fm(option.font);
 
-    // Badge on the right
+    // Source category tag (backend), always visible on the right
+    QString backendTag;
+    QColor tagColor;
+    switch (backend) {
+    case PackageModel::Backend::Pacman:
+        backendTag = i18n("Pacman");
+        tagColor = QColor(56, 121, 216);
+        break;
+    case PackageModel::Backend::Flatpak:
+        backendTag = i18n("Flatpak");
+        tagColor = QColor(64, 160, 140);
+        break;
+    case PackageModel::Backend::Cargo:
+        backendTag = i18n("Cargo");
+        tagColor = QColor(207, 90, 33);
+        break;
+    }
+    QFont tagFont = option.font;
+    tagFont.setPointSizeF(option.font.pointSizeF() * 0.85);
+    const QFontMetrics fmTag(tagFont);
+    const int tagWidth = backendTag.isEmpty() ? 0 : fmTag.horizontalAdvance(backendTag) + 16;
+
+    // Status badge
     QString badge;
     QColor badgeColor;
     switch (status) {
@@ -140,33 +162,44 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
 
     int badgeWidth = 0;
     if (!badge.isEmpty()) {
-        QFont badgeFont = option.font;
-        badgeFont.setPointSizeF(option.font.pointSizeF() * 0.85);
-        const QFontMetrics fmBadge(badgeFont);
+        const QFontMetrics fmBadge(tagFont);
         badgeWidth = fmBadge.horizontalAdvance(badge) + 16;
-        QRect badgeRect(textRight - badgeWidth, textArea.top(), badgeWidth, 20);
-        badgeRect.moveTop(textArea.top() + 2);
+    }
 
+    // Draw right-side pills: [status badge][source tag]
+    int rightCursor = textArea.right();
+    if (tagWidth > 0) {
+        QRect tagRect(rightCursor - tagWidth, textArea.top() + 2, tagWidth, 20);
+        QColor bg = tagColor;
+        bg.setAlpha(selected ? 220 : 50);
+        const QColor fg = selected ? pal.highlightedText().color() : tagColor.darker(140);
+        QPainterPath tagPath;
+        tagPath.addRoundedRect(tagRect, 10, 10);
+        painter->fillPath(tagPath, bg);
+        painter->setFont(tagFont);
+        painter->setPen(fg);
+        painter->drawText(tagRect, Qt::AlignCenter, backendTag);
+        rightCursor = tagRect.left() - 6;
+    }
+    if (badgeWidth > 0) {
+        QRect badgeRect(rightCursor - badgeWidth, textArea.top() + 2, badgeWidth, 20);
         QColor bg = badgeColor;
         bg.setAlpha(selected ? 220 : 45);
-        QColor fg;
-        if (selected)
-            fg = pal.highlightedText().color();
-        else
-            fg = badgeColor.darker(140);
-
+        const QColor fg = selected ? pal.highlightedText().color() : badgeColor.darker(140);
         QPainterPath badgePath;
         badgePath.addRoundedRect(badgeRect, 10, 10);
         painter->fillPath(badgePath, bg);
-        painter->setFont(badgeFont);
+        painter->setFont(tagFont);
         painter->setPen(fg);
         painter->drawText(badgeRect, Qt::AlignCenter, badge);
     }
 
-    // Name + version row
+    const int rightWidth = tagWidth + (badgeWidth > 0 ? badgeWidth + 6 : 0);
+
+    // Name row
     painter->setFont(nameFont);
     painter->setPen(selected ? pal.highlightedText().color() : pal.text().color());
-    const int nameAvail = textArea.width() - badgeWidth - 8;
+    const int nameAvail = textArea.width() - rightWidth - 10;
     const QString elidedName = fmName.elidedText(name, Qt::ElideRight, nameAvail * 3 / 5);
     const int nameWidth = fmName.horizontalAdvance(elidedName);
     painter->drawText(QRect(textArea.left(), textArea.top(), nameAvail * 3 / 5,
@@ -178,22 +211,25 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     painter->setPen(verColor);
     QString versionText = version.isEmpty() ? QString() : version;
     QRect verRect(textArea.left() + nameWidth + 10, textArea.top(),
-                  textArea.right() - (textArea.left() + nameWidth + 10), fmName.height());
-    if (!newVersion.isEmpty()) {
-        const QString arrow = QStringLiteral(" → %1").arg(newVersion);
-        const QString verElided = fm.elidedText(versionText + arrow, Qt::ElideRight,
-                                                verRect.width());
-        painter->drawText(verRect, Qt::AlignVCenter | Qt::AlignLeft, verElided);
-    } else if (!versionText.isEmpty()) {
+                  qMax(40, nameAvail * 2 / 5 - 10), fmName.height());
+    if (!newVersion.isEmpty() || !versionText.isEmpty()) {
+        const QString text = newVersion.isEmpty()
+            ? versionText
+            : QStringLiteral("%1 → %2").arg(versionText.isEmpty() ? QStringLiteral("—") : versionText, newVersion);
         painter->drawText(verRect, Qt::AlignVCenter | Qt::AlignLeft,
-                          fm.elidedText(versionText, Qt::ElideRight, verRect.width()));
+                          fm.elidedText(text, Qt::ElideRight, verRect.width()));
     }
 
-    // Description row
-    if (!description.isEmpty()) {
+    // Description row, prefixed with the concrete origin when available
+    const QString origin = index.data(PackageModel::OriginRole).toString();
+    QString descText = description;
+    if (!origin.isEmpty())
+        descText = descText.isEmpty() ? origin
+                                      : QStringLiteral("%1 · %2").arg(origin, descText);
+    if (!descText.isEmpty()) {
         painter->setPen(selected ? pal.highlightedText().color()
                                  : pal.placeholderText().color());
-        const QString desc = fm.elidedText(description, Qt::ElideRight, textArea.width());
+        const QString desc = fm.elidedText(descText, Qt::ElideMiddle, textArea.width());
         painter->drawText(QRect(textArea.left(), textArea.bottom() - fm.height() + 1,
                                 textArea.width(), fm.height()),
                           Qt::AlignVCenter | Qt::AlignLeft, desc);

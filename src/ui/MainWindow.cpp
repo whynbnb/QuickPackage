@@ -10,19 +10,20 @@
 #include <KNotification>
 #include <KSharedConfig>
 #include <KStandardAction>
-#include <QComboBox>
+#include <QButtonGroup>
 #include <QCloseEvent>
 #include <QDialogButtonBox>
 #include <QLineEdit>
 #include <QListView>
-#include <QMenuBar>
 #include <QMenu>
+#include <QMenuBar>
 #include <QMessageBox>
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
 #include <QStatusBar>
 #include <QTimer>
+#include <QToolButton>
 #include <QVBoxLayout>
 
 using Package = PackageModel::Package;
@@ -49,9 +50,10 @@ class MainWindow::PackageFilterProxyModel : public QSortFilterProxyModel
 public:
     void applyFilter(const QString &text, int backendFilter)
     {
+        beginFilterChange();
         searchText = text;
         backend = backendFilter;
-        invalidateFilter();
+        endFilterChange();
     }
 
     QString searchText;
@@ -175,16 +177,6 @@ void MainWindow::setupUi()
     m_searchEdit->setPlaceholderText(i18n("Search packages…"));
     topBar->addWidget(m_searchEdit, 1);
 
-    m_backendCombo = new QComboBox(central);
-    m_backendCombo->addItem(i18n("All"), BackendAll);
-    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Pacman),
-                            int(PackageModel::Backend::Pacman));
-    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Flatpak),
-                            int(PackageModel::Backend::Flatpak));
-    m_backendCombo->addItem(backendLabel(PackageModel::Backend::Cargo),
-                            int(PackageModel::Backend::Cargo));
-    topBar->addWidget(m_backendCombo);
-
     m_refreshButton = new QPushButton(i18n("Refresh"), central);
     m_refreshButton->setIcon(QIcon::fromTheme(QStringLiteral("view-refresh")));
     topBar->addWidget(m_refreshButton);
@@ -194,6 +186,32 @@ void MainWindow::setupUi()
     topBar->addWidget(m_updatesButton);
 
     layout->addLayout(topBar);
+
+    // Flat category chips: always-visible, one-click source filtering
+    auto *chipsRow = new QHBoxLayout;
+    chipsRow->setSpacing(6);
+    m_backendGroup = new QButtonGroup(this);
+    m_backendGroup->setExclusive(true);
+    auto makeChip = [this, central, &chipsRow](const QString &text, int id) {
+        auto *chip = new QToolButton(central);
+        chip->setText(text);
+        chip->setCheckable(true);
+        chip->setAutoRaise(true);
+        chip->setToolButtonStyle(Qt::ToolButtonTextOnly);
+        chipsRow->addWidget(chip);
+        m_backendGroup->addButton(chip, id);
+        return chip;
+    };
+    m_btnAll = makeChip(i18n("All"), BackendAll);
+    m_btnPacman = makeChip(backendLabel(PackageModel::Backend::Pacman),
+                           int(PackageModel::Backend::Pacman));
+    m_btnFlatpak = makeChip(backendLabel(PackageModel::Backend::Flatpak),
+                            int(PackageModel::Backend::Flatpak));
+    m_btnCargo = makeChip(backendLabel(PackageModel::Backend::Cargo),
+                          int(PackageModel::Backend::Cargo));
+    m_btnAll->setChecked(true);
+    chipsRow->addStretch();
+    layout->addLayout(chipsRow);
 
     m_listView = new QListView(central);
     m_listView->setModel(m_filterProxy);
@@ -235,8 +253,8 @@ void MainWindow::setupUi()
 
     connect(m_searchEdit, &QLineEdit::textChanged, this,
             [this](const QString &) { refreshFilterProxy(); });
-    connect(m_backendCombo, &QComboBox::currentIndexChanged, this,
-            [this](int index) { Q_UNUSED(index); refreshFilterProxy(); });
+    connect(m_backendGroup, &QButtonGroup::idClicked, this,
+            [this](int) { refreshFilterProxy(); });
     connect(m_refreshButton, &QPushButton::clicked, this,
             [this] { m_manager.refreshCache(); });
     connect(m_updatesButton, &QPushButton::clicked, this,
@@ -319,7 +337,7 @@ void MainWindow::setupActions()
 void MainWindow::refreshFilterProxy()
 {
     m_filterProxy->applyFilter(m_searchEdit->text().trimmed(),
-                               m_backendCombo->currentData().toInt());
+                               m_backendGroup->checkedId());
 }
 
 void MainWindow::updateCounters()
@@ -330,6 +348,28 @@ void MainWindow::updateCounters()
     m_installButton->setEnabled(selected > 0);
     m_removeButton->setEnabled(selected > 0);
     m_updatesButton->setEnabled(updates > 0);
+
+    // Live per-category counts so package sources are clearly visible
+    int pacman = 0, flatpak = 0, cargo = 0;
+    const int rows = m_model->rowCount();
+    for (int row = 0; row < rows; ++row) {
+        switch (static_cast<PackageModel::Backend>(
+            m_model->index(row).data(PackageModel::BackendRole).toInt())) {
+        case PackageModel::Backend::Pacman:
+            ++pacman;
+            break;
+        case PackageModel::Backend::Flatpak:
+            ++flatpak;
+            break;
+        case PackageModel::Backend::Cargo:
+            ++cargo;
+            break;
+        }
+    }
+    m_btnAll->setText(i18n("All (%1)", pacman + flatpak + cargo));
+    m_btnPacman->setText(i18n("Pacman (%1)", pacman));
+    m_btnFlatpak->setText(i18n("Flatpak (%1)", flatpak));
+    m_btnCargo->setText(i18n("Cargo (%1)", cargo));
 }
 
 void MainWindow::setBusy(bool busy, const QString &message)
@@ -348,7 +388,10 @@ void MainWindow::setBusy(bool busy, const QString &message)
     m_listView->setEnabled(!locked);
     m_refreshButton->setEnabled(!locked);
     m_searchEdit->setEnabled(!locked);
-    m_backendCombo->setEnabled(!locked);
+    m_btnAll->setEnabled(!locked);
+    m_btnPacman->setEnabled(!locked);
+    m_btnFlatpak->setEnabled(!locked);
+    m_btnCargo->setEnabled(!locked);
     if (locked) {
         m_installButton->setEnabled(false);
         m_removeButton->setEnabled(false);

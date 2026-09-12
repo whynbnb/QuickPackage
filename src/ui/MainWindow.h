@@ -10,11 +10,12 @@
 #include <QSet>
 #include <QSortFilterProxyModel>
 
-class QComboBox;
+class QButtonGroup;
 class QLineEdit;
 class QListView;
 class QProgressBar;
 class QPushButton;
+class QToolButton;
 
 class MainWindow : public KXmlGuiWindow
 {
@@ -50,7 +51,11 @@ private:
 
     QListView *m_listView = nullptr;
     QLineEdit *m_searchEdit = nullptr;
-    QComboBox *m_backendCombo = nullptr;
+    QButtonGroup *m_backendGroup = nullptr;
+    QToolButton *m_btnAll = nullptr;
+    QToolButton *m_btnPacman = nullptr;
+    QToolButton *m_btnFlatpak = nullptr;
+    QToolButton *m_btnCargo = nullptr;
     QPushButton *m_refreshButton = nullptr;
     QPushButton *m_updatesButton = nullptr;
     QPushButton *m_installButton = nullptr;
