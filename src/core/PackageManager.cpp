@@ -207,9 +207,10 @@ QSet<QString> PackageManager::cargoUpdateNames()
     if (!runCommand({QStringLiteral("cargo"), QStringLiteral("install-update"), QStringLiteral("--list")},
                     operationEnvironment(), &output, 120000))
         return updates;
-    // Lines look like: "bat v0.24.0 -> v0.25.0" or "bat v0.24.0 (Up to date)"
+    // Rows: "name vInstalled vLatest Yes|No" — only rows with "Yes" need an
+    // update; the header and polling lines do not match.
     static const QRegularExpression re(
-        QStringLiteral("^([a-zA-Z0-9_.-]+)\\s+v[0-9][^\\s]*"));
+        QStringLiteral("^([a-zA-Z0-9_.-]+)\\s+v\\S+\\s+v\\S+\\s+Yes\\b"));
     for (const QString &line : output.split(u'\n')) {
         const auto match = re.match(line.trimmed());
         if (match.hasMatch())
