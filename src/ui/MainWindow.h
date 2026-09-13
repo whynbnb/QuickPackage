@@ -59,6 +59,7 @@ private:
     QToolButton *m_btnPacman = nullptr;
     QToolButton *m_btnFlatpak = nullptr;
     QToolButton *m_btnCargo = nullptr;
+    QToolButton *m_btnUpdates = nullptr;
     QPushButton *m_refreshButton = nullptr;
     QPushButton *m_updatesButton = nullptr;
     QPushButton *m_installButton = nullptr;

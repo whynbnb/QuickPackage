@@ -31,32 +31,29 @@ msgstr "搜索软件包…"
 msgid "All"
 msgstr "全部"
 
-msgid "All (%1)"
-msgstr "全部 (%1)"
-
 msgid "Pacman"
 msgstr "Pacman"
-
-msgid "Pacman (%1)"
-msgstr "Pacman (%1)"
 
 msgid "Flatpak"
 msgstr "Flatpak"
 
-msgid "Flatpak (%1)"
-msgstr "Flatpak (%1)"
-
 msgid "Cargo"
 msgstr "Cargo"
 
-msgid "Cargo (%1)"
-msgstr "Cargo (%1)"
+msgid "%1 (%2)"
+msgstr "%1 (%2)"
+
+msgid "%1 (%2, %3 updates)"
+msgstr "%1 (%2, %3 可更新)"
 
 msgid "Refresh"
 msgstr "刷新"
 
 msgid "Updates"
 msgstr "更新"
+
+msgid "Updates (%1)"
+msgstr "可更新 (%1)"
 
 msgid "Install"
 msgstr "安装"

@@ -152,6 +152,15 @@ int PackageModel::updateCount() const
     return count;
 }
 
+int PackageModel::updateCount(Backend backend) const
+{
+    int count = 0;
+    for (const Package &pkg : std::as_const(m_packages))
+        if (pkg.status == Status::NeedsUpdate && pkg.backend == backend)
+            ++count;
+    return count;
+}
+
 QString PackageModel::backendName(Backend backend)
 {
     switch (backend) {

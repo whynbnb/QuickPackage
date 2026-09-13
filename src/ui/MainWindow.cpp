@@ -28,7 +28,10 @@
 using Package = PackageModel::Package;
 
 namespace {
-constexpr int BackendAll = -1;
+// Must not be -1: QButtonGroup::addButton(btn, -1) means "auto-assign id"
+// (negative ids starting at -2), so the All button would never get -1 and
+// checkedId() would return -2, filtering out every row.
+constexpr int BackendAll = 3;
 
 QString backendLabel(PackageModel::Backend backend)
 {
@@ -47,22 +50,29 @@ QString backendLabel(PackageModel::Backend backend)
 class MainWindow::PackageFilterProxyModel : public QSortFilterProxyModel
 {
 public:
-    void applyFilter(const QString &text, int backendFilter)
+    void applyFilter(const QString &text, int backendFilter, bool updatesOnlyFilter)
     {
         beginFilterChange();
         searchText = text;
         backend = backendFilter;
-        endFilterChange();
+        updatesOnly = updatesOnlyFilter;
+        endFilterChange(QSortFilterProxyModel::Direction::Rows);
     }
 
     QString searchText;
     int backend = BackendAll;
+    bool updatesOnly = false;
 
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
         const QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
         if (backend != BackendAll
             && index.data(PackageModel::BackendRole).toInt() != backend)
+            return false;
+        if (updatesOnly
+            && static_cast<PackageModel::Status>(
+                   index.data(PackageModel::StatusRole).toInt())
+                != PackageModel::Status::NeedsUpdate)
             return false;
         if (searchText.isEmpty())
             return true;
@@ -164,7 +174,7 @@ MainWindow::MainWindow(QWidget *parent)
         KSharedConfig::openConfig(QStringLiteral("quickpackagerc"))->group(QStringLiteral("General"));
 
     // Apply the saved color scheme (system / light / dark)
-    m_schemeManager = new KColorSchemeManager(this);
+    m_schemeManager = KColorSchemeManager::instance();
     const QString theme = group.readEntry(QStringLiteral("Theme"), QStringLiteral("system"));
     if (theme == QLatin1String("light"))
         m_schemeManager->activateSchemeId(QStringLiteral("BreezeLight"));
@@ -232,6 +242,14 @@ void MainWindow::setupUi()
                           int(PackageModel::Backend::Cargo));
     m_btnAll->setChecked(true);
     chipsRow->addStretch();
+
+    // Updates filter chip: click to show only packages with pending updates
+    m_btnUpdates = new QToolButton(central);
+    m_btnUpdates->setCheckable(true);
+    m_btnUpdates->setAutoRaise(true);
+    m_btnUpdates->setToolButtonStyle(Qt::ToolButtonTextOnly);
+    m_btnUpdates->setEnabled(false);
+    chipsRow->addWidget(m_btnUpdates);
     layout->addLayout(chipsRow);
 
     m_listView = new QListView(central);
@@ -276,6 +294,8 @@ void MainWindow::setupUi()
             [this](const QString &) { refreshFilterProxy(); });
     connect(m_backendGroup, &QButtonGroup::idClicked, this,
             [this](int) { refreshFilterProxy(); });
+    connect(m_btnUpdates, &QToolButton::toggled, this,
+            [this](bool) { refreshFilterProxy(); });
     connect(m_refreshButton, &QPushButton::clicked, this,
             [this] { m_manager.refreshCache(); });
     connect(m_updatesButton, &QPushButton::clicked, this,
@@ -345,7 +365,10 @@ void MainWindow::setupActions()
 void MainWindow::refreshFilterProxy()
 {
     m_filterProxy->applyFilter(m_searchEdit->text().trimmed(),
-                               m_backendGroup->checkedId());
+                               m_backendGroup->checkedId(),
+                               m_btnUpdates->isChecked());
+    // Reset the scroll position so a smaller result set is never shown blank
+    m_listView->scrollToTop();
 }
 
 void MainWindow::updateCounters()
@@ -357,7 +380,8 @@ void MainWindow::updateCounters()
     m_removeButton->setEnabled(selected > 0);
     m_updatesButton->setEnabled(updates > 0);
 
-    // Live per-category counts so package sources are clearly visible
+    // Live per-category counts (total + pending updates) so sources and
+    // pending updates are visible at a glance
     int pacman = 0, flatpak = 0, cargo = 0;
     const int rows = m_model->rowCount();
     for (int row = 0; row < rows; ++row) {
@@ -374,10 +398,29 @@ void MainWindow::updateCounters()
             break;
         }
     }
-    m_btnAll->setText(i18n("All (%1)", pacman + flatpak + cargo));
-    m_btnPacman->setText(i18n("Pacman (%1)", pacman));
-    m_btnFlatpak->setText(i18n("Flatpak (%1)", flatpak));
-    m_btnCargo->setText(i18n("Cargo (%1)", cargo));
+    auto chipText = [](const QString &label, int total, int updates) {
+        if (updates > 0)
+            return i18n("%1 (%2, %3 updates)", label, total, updates);
+        return i18n("%1 (%2)", label, total);
+    };
+    m_btnAll->setText(chipText(i18n("All"), pacman + flatpak + cargo, updates));
+    m_btnPacman->setText(chipText(i18n("Pacman"), pacman,
+                                  m_model->updateCount(PackageModel::Backend::Pacman)));
+    m_btnFlatpak->setText(chipText(i18n("Flatpak"), flatpak,
+                                   m_model->updateCount(PackageModel::Backend::Flatpak)));
+    m_btnCargo->setText(chipText(i18n("Cargo"), cargo,
+                                 m_model->updateCount(PackageModel::Backend::Cargo)));
+
+    m_btnUpdates->setText(i18n("Updates (%1)", updates));
+    QFont chipFont = m_btnUpdates->font();
+    chipFont.setBold(updates > 0);
+    m_btnUpdates->setFont(chipFont);
+    if (updates > 0) {
+        m_btnUpdates->setEnabled(true);
+    } else {
+        m_btnUpdates->setChecked(false);
+        m_btnUpdates->setEnabled(false);
+    }
 }
 
 void MainWindow::setBusy(bool busy, const QString &message)
@@ -400,6 +443,7 @@ void MainWindow::setBusy(bool busy, const QString &message)
     m_btnPacman->setEnabled(!locked);
     m_btnFlatpak->setEnabled(!locked);
     m_btnCargo->setEnabled(!locked);
+    m_btnUpdates->setEnabled(!locked);
     if (locked) {
         m_installButton->setEnabled(false);
         m_removeButton->setEnabled(false);

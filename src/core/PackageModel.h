@@ -60,6 +60,7 @@ public:
     QVector<Package> selectedPackages() const;
     int selectedCount() const;
     int updateCount() const;
+    int updateCount(Backend backend) const;
 
     static QString backendName(Backend backend);
     static QString statusText(Status status);
