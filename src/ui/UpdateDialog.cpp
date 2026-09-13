@@ -27,7 +27,8 @@ UpdateDialog::UpdateDialog(const QVector<Package> &updates, QWidget *parent)
     for (const Package &pkg : updates) {
         auto *item = new QTreeWidgetItem(m_tree);
         item->setText(0, pkg.name);
-        item->setText(1, PackageModel::backendName(pkg.backend));
+        item->setText(1, pkg.foreign ? i18n("AUR")
+                                     : PackageModel::backendName(pkg.backend));
         item->setText(2, pkg.version);
         item->setText(3, pkg.newVersion);
         item->setCheckState(0, Qt::Checked);

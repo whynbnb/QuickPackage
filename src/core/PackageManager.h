@@ -45,6 +45,7 @@ signals:
     void finished(bool ok, const QString &message);
     void packagesLoaded(const QVector<PackageModel::Package> &packages);
     void updatesReady(const QSet<QString> &pacmanUpdates,
+                      const QSet<QString> &aurUpdates,
                       const QSet<QString> &flatpakUpdates,
                       const QSet<QString> &cargoUpdates);
 
@@ -60,8 +61,13 @@ private:
     QVector<PackageModel::Package> queryFlatpak();
     QVector<PackageModel::Package> queryCargo();
     QSet<QString> queryPacmanUpdates();
+    QSet<QString> aurUpdateNames();
     QSet<QString> flatpakUpdateNames();
     QSet<QString> cargoUpdateNames();
+
+    // AUR helper used for foreign (AUR) packages: paru if available,
+    // otherwise yay; empty when neither is installed.
+    QString aurHelper() const;
 
     void runOperation(const QString &label, const QVector<PackageModel::Package> &packages,
                       Op op);

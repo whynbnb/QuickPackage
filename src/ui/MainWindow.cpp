@@ -30,10 +30,12 @@
 using Package = PackageModel::Package;
 
 namespace {
-// Must not be -1: QButtonGroup::addButton(btn, -1) means "auto-assign id"
-// (negative ids starting at -2), so the All button would never get -1 and
-// checkedId() would return -2, filtering out every row.
-constexpr int BackendAll = 3;
+    // Must not be -1: QButtonGroup::addButton(btn, -1) means "auto-assign id"
+    // (negative ids starting at -2), so the All button would never get -1 and
+    // checkedId() would return -2, filtering out every row.
+    constexpr int BackendAll = 3;
+    // AUR pseudo-filter: foreign (AUR/local) pacman packages.
+    constexpr int BackendAur = 4;
 
 QString backendLabel(PackageModel::Backend backend)
 {
@@ -68,9 +70,20 @@ public:
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
         const QModelIndex index = sourceModel()->index(sourceRow, 0, sourceParent);
-        if (backend != BackendAll
-            && index.data(PackageModel::BackendRole).toInt() != backend)
-            return false;
+        const auto rowBackend = static_cast<PackageModel::Backend>(
+            index.data(PackageModel::BackendRole).toInt());
+        const bool foreign = index.data(PackageModel::IsForeignRole).toBool();
+        if (backend == BackendAur) {
+            // AUR pseudo-filter: foreign pacman packages
+            if (rowBackend != PackageModel::Backend::Pacman || !foreign)
+                return false;
+        } else if (backend != BackendAll) {
+            if (index.data(PackageModel::BackendRole).toInt() != backend)
+                return false;
+            // The pacman chip only lists repo packages; AUR has its own chip.
+            if (rowBackend == PackageModel::Backend::Pacman && foreign)
+                return false;
+        }
         if (updatesOnly
             && static_cast<PackageModel::Status>(
                     index.data(PackageModel::StatusRole).toInt())
@@ -122,6 +135,9 @@ MainWindow::MainWindow(QWidget *parent)
                     for (const QString &name : std::as_const(m_pacmanUpdates))
                         m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
                                                      PackageModel::Status::NeedsUpdate);
+                    for (const QString &name : std::as_const(m_aurUpdates))
+                        m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
+                                                     PackageModel::Status::NeedsUpdate);
                     for (const QString &name : std::as_const(m_flatpakUpdates))
                         m_model->updatePackageStatus(name, PackageModel::Backend::Flatpak,
                                                      PackageModel::Status::NeedsUpdate);
@@ -132,14 +148,18 @@ MainWindow::MainWindow(QWidget *parent)
                 updateCounters();
             });
     connect(&m_manager, &PackageManager::updatesReady, this,
-            [this](const QSet<QString> &pacman, const QSet<QString> &flatpak,
-                   const QSet<QString> &cargo) {
+            [this](const QSet<QString> &pacman, const QSet<QString> &aur,
+                   const QSet<QString> &flatpak, const QSet<QString> &cargo) {
                 m_pacmanUpdates = pacman;
+                m_aurUpdates = aur;
                 m_flatpakUpdates = flatpak;
                 m_cargoUpdates = cargo;
                 m_updatesLoaded = true;
 
                 for (const QString &name : std::as_const(m_pacmanUpdates))
+                    m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
+                                                 PackageModel::Status::NeedsUpdate);
+                for (const QString &name : std::as_const(m_aurUpdates))
                     m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
                                                  PackageModel::Status::NeedsUpdate);
                 for (const QString &name : std::as_const(m_flatpakUpdates))
@@ -252,6 +272,7 @@ void MainWindow::setupUi()
     m_btnAll = makeChip(i18n("All"), BackendAll);
     m_btnPacman = makeChip(backendLabel(PackageModel::Backend::Pacman),
                            int(PackageModel::Backend::Pacman));
+    m_btnAur = makeChip(i18n("AUR"), BackendAur);
     m_btnFlatpak = makeChip(backendLabel(PackageModel::Backend::Flatpak),
                             int(PackageModel::Backend::Flatpak));
     m_btnCargo = makeChip(backendLabel(PackageModel::Backend::Cargo),
@@ -426,14 +447,26 @@ void MainWindow::updateCounters()
     m_updatesButton->setEnabled(updates > 0);
 
     // Live per-category counts (total + pending updates) so sources and
-    // pending updates are visible at a glance
-    int pacman = 0, flatpak = 0, cargo = 0;
+    // pending updates are visible at a glance. AUR (foreign pacman) packages
+    // get their own chip, so the pacman chip excludes them.
+    int pacman = 0, aur = 0, flatpak = 0, cargo = 0, aurUpdates = 0;
     const int rows = m_model->rowCount();
     for (int row = 0; row < rows; ++row) {
+        const QModelIndex index = m_model->index(row);
+        const bool foreign = index.data(PackageModel::IsForeignRole).toBool();
+        const bool needsUpdate = static_cast<PackageModel::Status>(
+            index.data(PackageModel::StatusRole).toInt())
+            == PackageModel::Status::NeedsUpdate;
         switch (static_cast<PackageModel::Backend>(
-            m_model->index(row).data(PackageModel::BackendRole).toInt())) {
+            index.data(PackageModel::BackendRole).toInt())) {
         case PackageModel::Backend::Pacman:
-            ++pacman;
+            if (foreign) {
+                ++aur;
+                if (needsUpdate)
+                    ++aurUpdates;
+            } else {
+                ++pacman;
+            }
             break;
         case PackageModel::Backend::Flatpak:
             ++flatpak;
@@ -448,9 +481,11 @@ void MainWindow::updateCounters()
             return i18n("%1 (%2, %3 updates)", label, total, updates);
         return i18n("%1 (%2)", label, total);
     };
-    m_btnAll->setText(chipText(i18n("All"), pacman + flatpak + cargo, updates));
+    m_btnAll->setText(chipText(i18n("All"), pacman + aur + flatpak + cargo, updates));
     m_btnPacman->setText(chipText(i18n("Pacman"), pacman,
-                                  m_model->updateCount(PackageModel::Backend::Pacman)));
+                                  m_model->updateCount(PackageModel::Backend::Pacman)
+                                      - aurUpdates));
+    m_btnAur->setText(chipText(i18n("AUR"), aur, aurUpdates));
     m_btnFlatpak->setText(chipText(i18n("Flatpak"), flatpak,
                                    m_model->updateCount(PackageModel::Backend::Flatpak)));
     m_btnCargo->setText(chipText(i18n("Cargo"), cargo,
@@ -487,6 +522,7 @@ void MainWindow::setBusy(bool busy, const QString &message)
     m_searchEdit->setEnabled(!locked);
     m_btnAll->setEnabled(!locked);
     m_btnPacman->setEnabled(!locked);
+    m_btnAur->setEnabled(!locked);
     m_btnFlatpak->setEnabled(!locked);
     m_btnCargo->setEnabled(!locked);
     m_btnUpdates->setEnabled(!locked);
@@ -596,6 +632,7 @@ void MainWindow::showUpdateDialog()
             pkg.newVersion = index.data(PackageModel::NewVersionRole).toString();
             pkg.backend = static_cast<PackageModel::Backend>(
                 index.data(PackageModel::BackendRole).toInt());
+            pkg.foreign = index.data(PackageModel::IsForeignRole).toBool();
             updates.append(pkg);
         }
     }
@@ -660,6 +697,7 @@ void MainWindow::applyEnabledBackends()
     m_manager.setBackendEnabled(PackageModel::Backend::Cargo, m_cargoEnabled);
 
     m_btnPacman->setVisible(m_pacmanEnabled);
+    m_btnAur->setVisible(m_pacmanEnabled);
     m_btnFlatpak->setVisible(m_flatpakEnabled);
     m_btnCargo->setVisible(m_cargoEnabled);
 
@@ -671,6 +709,7 @@ void MainWindow::applyEnabledBackends()
     // If the current backend chip was disabled, fall back to the All chip
     const int current = m_backendGroup->checkedId();
     if ((current == int(PackageModel::Backend::Pacman) && !m_pacmanEnabled)
+        || (current == BackendAur && !m_pacmanEnabled)
         || (current == int(PackageModel::Backend::Flatpak) && !m_flatpakEnabled)
         || (current == int(PackageModel::Backend::Cargo) && !m_cargoEnabled))
         m_btnAll->setChecked(true);

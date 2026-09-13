@@ -41,6 +41,8 @@ QVariant PackageModel::data(const QModelIndex &index, int role) const
         return pkg.origin;
     case PackageIdRole:
         return pkg.packageId;
+    case IsForeignRole:
+        return pkg.foreign;
     default:
         return {};
     }
@@ -59,7 +61,8 @@ QHash<int, QByteArray> PackageModel::roleNames() const
         {IsSelectedRole, "selected"},
         {SizeRole, "size"},
         {OriginRole, "origin"},
-        {PackageIdRole, "packageId"}};
+        {PackageIdRole, "packageId"},
+        {IsForeignRole, "foreign"}};
 }
 
 PackageModel::Package PackageModel::packageAt(int row) const

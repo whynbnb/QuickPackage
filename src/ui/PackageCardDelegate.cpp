@@ -110,13 +110,21 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     QFontMetrics fmName(nameFont);
     QFontMetrics fm(option.font);
 
-    // Source category tag (backend), always visible on the right
+    // Source category tag (backend), always visible on the right. Foreign
+    // (AUR/local) pacman packages get a prominent "AUR" tag instead.
     QString backendTag;
     QColor tagColor;
+    bool foreign = false;
     switch (backend) {
     case PackageModel::Backend::Pacman:
-        backendTag = i18n("Pacman");
-        tagColor = QColor(56, 121, 216);
+        foreign = index.data(PackageModel::IsForeignRole).toBool();
+        if (foreign) {
+            backendTag = i18n("AUR");
+            tagColor = QColor(130, 80, 223);
+        } else {
+            backendTag = i18n("Pacman");
+            tagColor = QColor(56, 121, 216);
+        }
         break;
     case PackageModel::Backend::Flatpak:
         backendTag = i18n("Flatpak");
@@ -129,6 +137,8 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     }
     QFont tagFont = option.font;
     tagFont.setPointSizeF(option.font.pointSizeF() * 0.85);
+    if (foreign)
+        tagFont.setBold(true);
     const QFontMetrics fmTag(tagFont);
     const int tagWidth = backendTag.isEmpty() ? 0 : fmTag.horizontalAdvance(backendTag) + 16;
 
@@ -171,7 +181,7 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     if (tagWidth > 0) {
         QRect tagRect(rightCursor - tagWidth, textArea.top() + 2, tagWidth, 20);
         QColor bg = tagColor;
-        bg.setAlpha(selected ? 220 : 50);
+        bg.setAlpha(selected ? 220 : (foreign ? 70 : 50));
         const QColor fg = selected ? pal.highlightedText().color() : tagColor.darker(140);
         QPainterPath tagPath;
         tagPath.addRoundedRect(tagRect, 10, 10);

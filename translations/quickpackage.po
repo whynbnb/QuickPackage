@@ -361,3 +361,12 @@ msgstr "所有包管理后端均已关闭,请在设置中启用至少一个。"
 
 msgid "No package backends enabled"
 msgstr "未启用任何包管理后端"
+
+msgid "AUR"
+msgstr "AUR"
+
+msgid "Upgrading AUR packages (%1 -Sua)…"
+msgstr "正在升级 AUR 包(%1 -Sua)…"
+
+msgid "No AUR helper (paru or yay) found"
+msgstr "未找到 AUR 助手(需要 paru 或 yay)"

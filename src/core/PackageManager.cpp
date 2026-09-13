@@ -6,6 +6,7 @@
 #include <QMutex>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QTextStream>
 #include <QThreadPool>
 
@@ -202,8 +203,10 @@ QVector<Package> PackageManager::queryPacman()
             const auto it = repoByName.constFind(item.name);
             if (it != repoByName.constEnd())
                 item.origin = it.value();
-            else if (item.origin.isEmpty() || item.origin == QLatin1String("None"))
+            else if (item.origin.isEmpty() || item.origin == QLatin1String("None")) {
                 item.origin = i18n("AUR / local");
+                item.foreign = true;
+            }
         }
     }
     return result;
@@ -296,6 +299,36 @@ QSet<QString> PackageManager::queryPacmanUpdates()
     return updates;
 }
 
+QString PackageManager::aurHelper() const
+{
+    const QString paru = QStandardPaths::findExecutable(QStringLiteral("paru"));
+    if (!paru.isEmpty())
+        return QStringLiteral("paru");
+    const QString yay = QStandardPaths::findExecutable(QStringLiteral("yay"));
+    if (!yay.isEmpty())
+        return QStringLiteral("yay");
+    return {};
+}
+
+QSet<QString> PackageManager::aurUpdateNames()
+{
+    QSet<QString> updates;
+    const QString helper = aurHelper();
+    if (helper.isEmpty())
+        return updates;
+    QString output;
+    if (!runCommand({helper, QStringLiteral("-Qua")}, operationEnvironment(), &output, 120000))
+        return updates;
+    // "name oldver -> newver" (checkupdates style) or "name newver"; the name
+    // is always the first token.
+    for (const QString &line : output.split(u'\n')) {
+        const QStringList toks = line.trimmed().split(u' ');
+        if (toks.size() >= 2 && !toks.first().isEmpty())
+            updates.insert(toks.first());
+    }
+    return updates;
+}
+
 QSet<QString> PackageManager::flatpakUpdateNames()
 {
     QSet<QString> updates;
@@ -378,22 +411,26 @@ void PackageManager::refreshUpdates()
 {
     Q_EMIT started(i18n("Checking for updates…"));
 
-    const int count = (m_pacmanEnabled ? 1 : 0) + (m_flatpakEnabled ? 1 : 0)
-        + (m_cargoEnabled ? 1 : 0);
+    // AUR updates are only tracked when pacman is enabled and an AUR helper
+    // (paru/yay) is installed.
+    const bool aurEnabled = m_pacmanEnabled && !aurHelper().isEmpty();
+    const int count = (m_pacmanEnabled ? 1 : 0) + (aurEnabled ? 1 : 0)
+        + (m_flatpakEnabled ? 1 : 0) + (m_cargoEnabled ? 1 : 0);
     if (count == 0) {
         QMetaObject::invokeMethod(this, [this] {
-            Q_EMIT updatesReady({}, {}, {});
+            Q_EMIT updatesReady({}, {}, {}, {});
             Q_EMIT finished(true, i18n("No package backends enabled"));
         }, Qt::QueuedConnection);
         return;
     }
 
     auto pacmanRes = std::make_shared<QSet<QString>>();
+    auto aurRes = std::make_shared<QSet<QString>>();
     auto flatpakRes = std::make_shared<QSet<QString>>();
     auto cargoRes = std::make_shared<QSet<QString>>();
     auto mutex = std::make_shared<QMutex>();
     auto remaining = std::make_shared<std::atomic<int>>(count);
-    auto merge = [this, pacmanRes, flatpakRes, cargoRes, mutex,
+    auto merge = [this, pacmanRes, aurRes, flatpakRes, cargoRes, mutex,
                   remaining](int which, QSet<QString> part) {
         {
             QMutexLocker locker(mutex.get());
@@ -402,6 +439,9 @@ void PackageManager::refreshUpdates()
                 *pacmanRes = part;
                 break;
             case 1:
+                *aurRes = part;
+                break;
+            case 2:
                 *flatpakRes = part;
                 break;
             default:
@@ -411,25 +451,28 @@ void PackageManager::refreshUpdates()
         }
         if (remaining->fetch_sub(1) != 1)
             return;
-        QSet<QString> pacman, flatpak, cargo;
+        QSet<QString> pacman, aur, flatpak, cargo;
         {
             QMutexLocker locker(mutex.get());
             pacman = *pacmanRes;
+            aur = *aurRes;
             flatpak = *flatpakRes;
             cargo = *cargoRes;
         }
-        QMetaObject::invokeMethod(this, [this, pacman, flatpak, cargo] {
-            Q_EMIT updatesReady(pacman, flatpak, cargo);
+        QMetaObject::invokeMethod(this, [this, pacman, aur, flatpak, cargo] {
+            Q_EMIT updatesReady(pacman, aur, flatpak, cargo);
             Q_EMIT finished(true, i18n("Update check finished"));
         }, Qt::QueuedConnection);
     };
 
     if (m_pacmanEnabled)
         m_pool->start([this, merge] { merge(0, queryPacmanUpdates()); });
+    if (aurEnabled)
+        m_pool->start([this, merge] { merge(1, aurUpdateNames()); });
     if (m_flatpakEnabled)
-        m_pool->start([this, merge] { merge(1, flatpakUpdateNames()); });
+        m_pool->start([this, merge] { merge(2, flatpakUpdateNames()); });
     if (m_cargoEnabled)
-        m_pool->start([this, merge] { merge(2, cargoUpdateNames()); });
+        m_pool->start([this, merge] { merge(3, cargoUpdateNames()); });
 }
 
 void PackageManager::runOperation(const QString &label,
@@ -442,12 +485,14 @@ void PackageManager::runOperation(const QString &label,
         QString lastError;
 
         // Pacman must never be partially updated: one full "-Syu" upgrades the
-        // whole system (and the requested packages with it). Flatpak/cargo
-        // targets below update only their own packages.
+        // whole system (and the requested repo packages with it). AUR packages
+        // are upgraded by one helper pass; flatpak/cargo targets below update
+        // only their own packages.
         if (op == Op::Update) {
             const bool hasPacman = std::any_of(packages.cbegin(), packages.cend(),
                                                [](const Package &p) {
-                                                   return p.backend == Backend::Pacman;
+                                                   return p.backend == Backend::Pacman
+                                                       && !p.foreign;
                                                });
             if (hasPacman) {
                 if (m_cancelled) {
@@ -466,6 +511,34 @@ void PackageManager::runOperation(const QString &label,
                     Q_EMIT progress(i18n("Failed: pacman -Syu"));
                 }
             }
+
+            // Foreign (AUR) packages cannot be upgraded by pacman: one helper
+            // "-Sua" upgrades every AUR package installed on the system.
+            const bool hasAur = std::any_of(packages.cbegin(), packages.cend(),
+                                            [](const Package &p) {
+                                                return p.backend == Backend::Pacman
+                                                    && p.foreign;
+                                            });
+            if (hasAur) {
+                const QString helper = aurHelper();
+                if (helper.isEmpty()) {
+                    ok = false;
+                    lastError = i18n("No AUR helper (paru or yay) found");
+                    Q_EMIT progress(i18n("Failed: %1", QStringLiteral("AUR")));
+                } else if (!m_cancelled) {
+                    Q_EMIT progress(i18n("Upgrading AUR packages (%1 -Sua)…", helper));
+                    QStringList args{helper, QStringLiteral("-Sua"),
+                                     QStringLiteral("--noconfirm")};
+                    if (helper == QLatin1String("paru"))
+                        args << QStringLiteral("--skipreview");
+                    QString output;
+                    if (!runCommand(args, env, &output, 3600000)) {
+                        ok = false;
+                        lastError = i18n("%1 -Sua: %2", helper, output.right(400));
+                        Q_EMIT progress(i18n("Failed: %1", QStringLiteral("AUR")));
+                    }
+                }
+            }
         }
 
         for (const Package &pkg : packages) {
@@ -482,7 +555,27 @@ void PackageManager::runOperation(const QString &label,
             const QString id = pkg.packageId.isEmpty() ? pkg.name : pkg.packageId;
             QStringList args;
             const QString pkgLabel = pkg.name;
-            if (pkg.backend == Backend::Pacman) {
+            if (pkg.backend == Backend::Pacman && pkg.foreign) {
+                if (op == Op::Remove) {
+                    // Foreign packages live in the local database, so plain
+                    // pacman can remove them.
+                    args << QStringLiteral("sudo") << QStringLiteral("pacman")
+                         << QStringLiteral("-Rns") << QStringLiteral("--noconfirm") << id;
+                } else {
+                    // AUR packages can only be built/updated by an AUR helper.
+                    const QString helper = aurHelper();
+                    if (helper.isEmpty()) {
+                        ok = false;
+                        lastError = i18n("No AUR helper (paru or yay) found");
+                        Q_EMIT progress(i18n("Failed: %1", pkgLabel));
+                        continue;
+                    }
+                    args << helper << QStringLiteral("-S")
+                         << QStringLiteral("--noconfirm") << id;
+                    if (helper == QLatin1String("paru"))
+                        args << QStringLiteral("--skipreview");
+                }
+            } else if (pkg.backend == Backend::Pacman) {
                 if (op == Op::Install)
                     args << QStringLiteral("sudo") << QStringLiteral("pacman")
                          << QStringLiteral("-S") << QStringLiteral("--noconfirm") << id;
@@ -504,7 +597,8 @@ void PackageManager::runOperation(const QString &label,
             }
 
             Q_EMIT progress(op == Op::Remove ? i18n("Removing %1…", pkgLabel)
-                                             : i18n("Updating %1…", pkgLabel));
+                          : op == Op::Install ? i18n("Installing %1…", pkgLabel)
+                                              : i18n("Updating %1…", pkgLabel));
             QString output;
             if (!runCommand(args, env, &output, 1800000)) {
                 ok = false;

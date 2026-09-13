@@ -67,6 +67,7 @@ private:
     KColorSchemeManager *m_schemeManager = nullptr;
     QToolButton *m_btnAll = nullptr;
     QToolButton *m_btnPacman = nullptr;
+    QToolButton *m_btnAur = nullptr;
     QToolButton *m_btnFlatpak = nullptr;
     QToolButton *m_btnCargo = nullptr;
     QToolButton *m_btnUpdates = nullptr;
@@ -79,6 +80,7 @@ private:
     QProgressBar *m_progressBar = nullptr;
 
     QSet<QString> m_pacmanUpdates;
+    QSet<QString> m_aurUpdates;
     QSet<QString> m_flatpakUpdates;
     QSet<QString> m_cargoUpdates;
     bool m_updatesLoaded = false;

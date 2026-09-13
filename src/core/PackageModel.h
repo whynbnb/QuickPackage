@@ -29,7 +29,8 @@ public:
         IsSelectedRole,
         SizeRole,
         OriginRole,
-        PackageIdRole
+        PackageIdRole,
+        IsForeignRole
     };
 
     struct Package {
@@ -51,6 +52,9 @@ public:
         Status status = Status::Idle;
         bool installed = false;
         bool selected = false;
+        // Foreign (AUR/local) package: installed by pacman but absent from the
+        // sync repositories, so it needs an AUR helper (paru/yay) to update.
+        bool foreign = false;
     };
 
     explicit PackageModel(QObject *parent = nullptr);
