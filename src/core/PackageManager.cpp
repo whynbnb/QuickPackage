@@ -240,7 +240,7 @@ void PackageManager::refreshCache()
         }
         QMetaObject::invokeMethod(this, [this, all] {
             Q_EMIT packagesLoaded(all);
-            Q_EMIT finished(true, i18n("Loaded %1 packages").arg(all.size()));
+            Q_EMIT finished(true, i18n("Loaded %1 packages", all.size()));
         }, Qt::QueuedConnection);
     };
 
@@ -335,16 +335,16 @@ void PackageManager::runOperation(const QString &label,
                     args << QStringLiteral("cargo") << QStringLiteral("uninstall") << id;
             }
 
-            Q_EMIT progress(installOp ? i18n("Installing %1…").arg(pkgLabel)
-                                     : i18n("Removing %1…").arg(pkgLabel));
+            Q_EMIT progress(installOp ? i18n("Installing %1…", pkgLabel)
+                                     : i18n("Removing %1…", pkgLabel));
             QString output;
             if (!runCommand(args, env, &output, 1800000)) {
                 ok = false;
-                lastError = i18n("%1: %2").arg(pkgLabel, output.right(400));
-                Q_EMIT progress(i18n("Failed: %1").arg(pkgLabel));
+                lastError = i18n("%1: %2", pkgLabel, output.right(400));
+                Q_EMIT progress(i18n("Failed: %1", pkgLabel));
                 continue;
             }
-            Q_EMIT progress(i18n("Done: %1").arg(pkgLabel));
+            Q_EMIT progress(i18n("Done: %1", pkgLabel));
         }
         const bool wasOk = ok;
         const QString err = lastError;
