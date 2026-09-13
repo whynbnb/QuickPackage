@@ -146,9 +146,10 @@ QVector<Package> PackageManager::queryCargo()
         qEnvironmentVariable("CARGO_HOME", QDir::homePath() + QStringLiteral("/.cargo"));
     QFile listFile(cargoHome + QStringLiteral("/.crates.toml"));
     if (listFile.exists() && listFile.open(QIODevice::ReadOnly)) {
-        // Format: [name version] followed by source lines, e.g.
-        // ["bat 0.24.0 (registry+https://github.com/rust-lang/crates.io-index)"]
-        const QRegularExpression re(QStringLiteral("^\\[\"([a-zA-Z0-9_.-]+) ([0-9][^\"]+)\"\\]"));
+        // Format: "name version (source)" = ["binary"] lines inside a [v1] table,
+        // e.g. "bat 0.26.1 (registry+https://github.com/rust-lang/crates.io-index)" = ["bat"]
+        static const QRegularExpression re(
+            QStringLiteral("^\\s*\"([a-zA-Z0-9_.+-]+) ([^\\s\"]+) \\([^)]*\\)\"\\s*="));
         QTextStream stream(&listFile);
         while (!stream.atEnd()) {
             const QString line = stream.readLine();
