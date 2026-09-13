@@ -17,6 +17,7 @@ class QProgressBar;
 class QPushButton;
 class QToolButton;
 
+class DetailPanel;
 class KColorSchemeManager;
 
 class MainWindow : public KXmlGuiWindow
@@ -40,6 +41,9 @@ private:
     void setBusy(bool busy, const QString &message = {});
     void installSelected();
     void removeSelected();
+    void installPackage(const PackageModel::Package &package);
+    void uninstallPackage(const PackageModel::Package &package);
+    void updatePackage(const PackageModel::Package &package);
     void showUpdateDialog();
     void showProxyDialog();
     void showSettingsDialog();
@@ -52,6 +56,7 @@ private:
     PackageFilterProxyModel *m_filterProxy = nullptr;
 
     QListView *m_listView = nullptr;
+    DetailPanel *m_detailPanel = nullptr;
     QLineEdit *m_searchEdit = nullptr;
     QButtonGroup *m_backendGroup = nullptr;
     KColorSchemeManager *m_schemeManager = nullptr;

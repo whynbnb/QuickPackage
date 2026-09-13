@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include "DetailPanel.h"
 #include "PackageCardDelegate.h"
 #include "ProxyDialog.h"
 #include "SettingsDialog.h"
@@ -167,6 +168,9 @@ MainWindow::MainWindow(QWidget *parent)
                 notify(QStringLiteral("operation-done"), i18n("Operation finished"), message);
             else
                 notify(QStringLiteral("operation-failed"), i18n("Operation failed"), message);
+            // Refresh the lists so the new state is reflected immediately
+            m_manager.refreshCache();
+            m_manager.refreshUpdates();
         }
     });
 
@@ -259,7 +263,16 @@ void MainWindow::setupUi()
     m_listView->setUniformItemSizes(false);
     m_listView->setMouseTracking(true);
     m_listView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
-    layout->addWidget(m_listView, 1);
+
+    // Master-detail: click a card on the left to inspect and act on it
+    m_detailPanel = new DetailPanel(central);
+    m_detailPanel->setProxyEnvironment(m_manager.operationEnvironment());
+    m_detailPanel->setFixedWidth(330);
+    auto *split = new QHBoxLayout;
+    split->setSpacing(10);
+    split->addWidget(m_listView, 1);
+    split->addWidget(m_detailPanel);
+    layout->addLayout(split, 1);
 
     auto *bottomBar = new QHBoxLayout;
     bottomBar->setSpacing(8);
@@ -304,6 +317,16 @@ void MainWindow::setupUi()
             [this] { installSelected(); });
     connect(m_removeButton, &QPushButton::clicked, this,
             [this] { removeSelected(); });
+    connect(m_listView, &QListView::clicked, this, [this](const QModelIndex &proxyIndex) {
+        const QModelIndex index = m_filterProxy->mapToSource(proxyIndex);
+        m_detailPanel->setPackage(m_model->packageAt(index.row()));
+    });
+    connect(m_detailPanel, &DetailPanel::installRequested, this,
+            [this](const Package &pkg) { installPackage(pkg); });
+    connect(m_detailPanel, &DetailPanel::uninstallRequested, this,
+            [this](const Package &pkg) { uninstallPackage(pkg); });
+    connect(m_detailPanel, &DetailPanel::updateRequested, this,
+            [this](const Package &pkg) { updatePackage(pkg); });
     connect(m_model, &PackageModel::dataChanged, this, [this] { updateCounters(); });
     connect(m_model, &PackageModel::modelReset, this, [this] { updateCounters(); });
 
@@ -493,6 +516,48 @@ void MainWindow::removeSelected()
     m_manager.remove(packages);
 }
 
+void MainWindow::installPackage(const Package &pkg)
+{
+    const auto answer = QMessageBox::question(this, i18n("Install Package"),
+                                              i18n("Install %1?", pkg.name),
+                                              QMessageBox::Yes | QMessageBox::Cancel,
+                                              QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+        return;
+    m_inUserOperation = true;
+    m_manager.install({pkg});
+}
+
+void MainWindow::uninstallPackage(const Package &pkg)
+{
+    const auto answer = QMessageBox::question(this, i18n("Uninstall Package"),
+                                              i18n("Uninstall %1?", pkg.name),
+                                              QMessageBox::Yes | QMessageBox::Cancel,
+                                              QMessageBox::Cancel);
+    if (answer != QMessageBox::Yes)
+        return;
+    m_inUserOperation = true;
+    m_manager.remove({pkg});
+}
+
+void MainWindow::updatePackage(const Package &pkg)
+{
+    QString note;
+    if (pkg.backend == PackageModel::Backend::Pacman) {
+        note = i18n("Pacman updates always upgrade the whole system first"
+                    " (pacman -Syu) to avoid partial updates.");
+    }
+    const auto answer = QMessageBox::question(
+        this, i18n("Update Package"),
+        i18n("Update %1?", pkg.name)
+            + (note.isEmpty() ? QString() : QStringLiteral("\n\n") + note),
+        QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Yes);
+    if (answer != QMessageBox::Yes)
+        return;
+    m_inUserOperation = true;
+    m_manager.update({pkg});
+}
+
 void MainWindow::showUpdateDialog()
 {
     QVector<Package> updates;
@@ -517,10 +582,8 @@ void MainWindow::showUpdateDialog()
         const QVector<Package> checked = dialog.checkedPackages();
         if (checked.isEmpty())
             return;
-        m_model->clearSelection();
-        for (const Package &pkg : checked)
-            m_model->setSelected(pkg.name, pkg.backend, true);
-        installSelected();
+        m_inUserOperation = true;
+        m_manager.update(checked);
     }
 }
 
@@ -530,6 +593,7 @@ void MainWindow::showProxyDialog()
     if (dialog.exec() == QDialog::Accepted) {
         const QString url = m_proxy.url();
         m_manager.setProxy(url, url);
+        m_detailPanel->setProxyEnvironment(m_manager.operationEnvironment());
         if (url.isEmpty())
             m_statusLabel->setText(i18n("Proxy disabled"));
         else

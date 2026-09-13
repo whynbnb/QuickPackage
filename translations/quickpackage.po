@@ -52,6 +52,45 @@ msgstr "刷新"
 msgid "Updates"
 msgstr "更新"
 
+msgid "Uninstall"
+msgstr "卸载"
+
+msgid "Select a package to see details"
+msgstr "选择一个软件包以查看详情"
+
+msgid "Install Package"
+msgstr "安装软件包"
+
+msgid "Uninstall Package"
+msgstr "卸载软件包"
+
+msgid "Update Package"
+msgstr "更新软件包"
+
+msgid "Install %1?"
+msgstr "安装 %1?"
+
+msgid "Uninstall %1?"
+msgstr "卸载 %1?"
+
+msgid "Update %1?"
+msgstr "更新 %1?"
+
+msgid "Pacman updates always upgrade the whole system first (pacman -Syu) to avoid partial updates."
+msgstr "Pacman 更新会先升级整个系统(pacman -Syu),以避免局部更新。"
+
+msgid "Updating packages…"
+msgstr "正在更新软件包…"
+
+msgid "Updating %1…"
+msgstr "正在更新 %1…"
+
+msgid "Upgrading system (pacman -Syu)…"
+msgstr "正在升级系统(pacman -Syu)…"
+
+msgid "Failed: pacman -Syu"
+msgstr "失败:pacman -Syu"
+
 msgid "Updates (%1)"
 msgstr "可更新 (%1)"
 
@@ -262,3 +301,45 @@ msgstr[0] "%1 个更新可用"
 msgid "1 Update Available"
 msgid_plural "%1 Updates Available"
 msgstr[0] "%1 个可用更新"
+
+msgid "Id:"
+msgstr "标识:"
+
+msgid "Version:"
+msgstr "版本:"
+
+msgid "Origin:"
+msgstr "来源:"
+
+msgid "Size:"
+msgstr "大小:"
+
+msgid "Install date:"
+msgstr "安装日期:"
+
+msgid "Install reason:"
+msgstr "安装原因:"
+
+msgid "Packager:"
+msgstr "打包者:"
+
+msgid "URL:"
+msgstr "网址:"
+
+msgid "Licenses:"
+msgstr "许可:"
+
+msgid "Depends on:"
+msgstr "依赖:"
+
+msgid "Binaries:"
+msgstr "可执行文件:"
+
+msgid "Loading description…"
+msgstr "正在加载描述…"
+
+msgid "AUR / local"
+msgstr "AUR / 本地"
+
+msgid "local path"
+msgstr "本地路径"

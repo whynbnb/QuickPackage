@@ -39,6 +39,14 @@ public:
         QString newVersion;
         QString description;
         QString origin;
+        QString size;
+        QString installDate;
+        QString installReason;
+        QString packager;
+        QString url;
+        QString licenses;
+        QString depends;
+        QString binaries;
         Backend backend = Backend::Pacman;
         Status status = Status::Idle;
         bool installed = false;
@@ -52,6 +60,7 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setPackages(const QVector<Package> &packages);
+    Q_INVOKABLE Package packageAt(int row) const;
     void updatePackageStatus(const QString &nameOrId, Backend backend, Status status);
     void setPackageInstalled(const QString &nameOrId, Backend backend, bool installed,
                              const QString &version = {});

@@ -9,6 +9,7 @@
 #include <QTextStream>
 #include <QThreadPool>
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
@@ -91,23 +92,104 @@ QVector<Package> PackageManager::queryPacman()
 {
     QVector<Package> result;
     QProcess proc;
-    proc.setProcessEnvironment(operationEnvironment());
-    proc.start(QStringLiteral("pacman"), {QStringLiteral("-Qn")});
-    if (!proc.waitForFinished(30000))
+    // LANG/LC_ALL=C keep the "key : value" layout stable for parsing; with the
+    // user's locale pacman translates the keys and dates.
+    QProcessEnvironment env = operationEnvironment();
+    env.insert(QStringLiteral("LANG"), QStringLiteral("C"));
+    env.insert(QStringLiteral("LC_ALL"), QStringLiteral("C"));
+    proc.setProcessEnvironment(env);
+    proc.start(QStringLiteral("pacman"), {QStringLiteral("-Qi")});
+    if (!proc.waitForFinished(60000))
         return result;
     const QStringList lines = QString::fromUtf8(proc.readAllStandardOutput()).split(u'\n');
+    Package pkg;
+    QString *current = nullptr;
+    const auto flush = [&] {
+        if (!pkg.name.isEmpty()) {
+            pkg.packageId = pkg.name;
+            pkg.backend = Backend::Pacman;
+            pkg.installed = true;
+            result.append(pkg);
+        }
+        pkg = Package{};
+    };
     for (const QString &line : lines) {
-        const int sp = line.indexOf(u' ');
-        if (sp <= 0)
+        if (line.trimmed().isEmpty()) {
+            flush();
+            current = nullptr;
             continue;
-        Package pkg;
-        pkg.name = line.left(sp);
-        pkg.packageId = pkg.name;
-        pkg.version = line.mid(sp + 1).trimmed();
-        pkg.backend = Backend::Pacman;
-        pkg.installed = true;
-        pkg.origin = QStringLiteral("core/extra/multilib");
-        result.append(pkg);
+        }
+        const int sep = line.indexOf(QStringLiteral(" : "));
+        if (sep < 0) {
+            // Continuation of the previous (wrapped) value.
+            if (current)
+                *current += QStringLiteral(" ") + line.trimmed();
+            continue;
+        }
+        const QString key = line.left(sep).trimmed();
+        const QString value = line.mid(sep + 3).trimmed();
+        if (key == QLatin1String("Name")) {
+            pkg.name = value;
+            current = &pkg.name;
+        } else if (key == QLatin1String("Version")) {
+            pkg.version = value;
+            current = &pkg.version;
+        } else if (key == QLatin1String("Description")) {
+            pkg.description = value;
+            current = &pkg.description;
+        } else if (key == QLatin1String("Repository")) {
+            pkg.origin = value;
+            current = &pkg.origin;
+        } else if (key == QLatin1String("Installed Size")) {
+            pkg.size = value;
+            current = &pkg.size;
+        } else if (key == QLatin1String("Install Date")) {
+            pkg.installDate = value;
+            current = &pkg.installDate;
+        } else if (key == QLatin1String("Install Reason")) {
+            pkg.installReason = value;
+            current = &pkg.installReason;
+        } else if (key == QLatin1String("Packager")) {
+            pkg.packager = value;
+            current = &pkg.packager;
+        } else if (key == QLatin1String("URL")) {
+            pkg.url = value;
+            current = &pkg.url;
+        } else if (key == QLatin1String("Licenses")) {
+            pkg.licenses = value;
+            current = &pkg.licenses;
+        } else if (key == QLatin1String("Depends On")) {
+            pkg.depends = value;
+            current = &pkg.depends;
+        } else {
+            current = nullptr;
+        }
+    }
+    flush();
+
+    // pacman -Qi carries no repository field on this system; map installed
+    // packages to their repo via "pacman -Sl" ("core bash 5.3.15-1 [installed]").
+    // Anything absent from the sync databases is a foreign (AUR/local) package.
+    QProcess listProc;
+    listProc.setProcessEnvironment(env);
+    listProc.start(QStringLiteral("pacman"), {QStringLiteral("-Sl")});
+    if (listProc.waitForFinished(60000)) {
+        QHash<QString, QString> repoByName;
+        static const QRegularExpression repoRe(
+            QStringLiteral("^(\\S+) (\\S+) \\S+ \\[installed\\]$"));
+        for (const QString &line :
+             QString::fromUtf8(listProc.readAllStandardOutput()).split(u'\n')) {
+            const auto match = repoRe.match(line.trimmed());
+            if (match.hasMatch() && !repoByName.contains(match.captured(2)))
+                repoByName.insert(match.captured(2), match.captured(1));
+        }
+        for (Package &item : result) {
+            const auto it = repoByName.constFind(item.name);
+            if (it != repoByName.constEnd())
+                item.origin = it.value();
+            else if (item.origin.isEmpty() || item.origin == QLatin1String("None"))
+                item.origin = i18n("AUR / local");
+        }
     }
     return result;
 }
@@ -146,24 +228,38 @@ QVector<Package> PackageManager::queryCargo()
         qEnvironmentVariable("CARGO_HOME", QDir::homePath() + QStringLiteral("/.cargo"));
     QFile listFile(cargoHome + QStringLiteral("/.crates.toml"));
     if (listFile.exists() && listFile.open(QIODevice::ReadOnly)) {
-        // Format: "name version (source)" = ["binary"] lines inside a [v1] table,
-        // e.g. "bat 0.26.1 (registry+https://github.com/rust-lang/crates.io-index)" = ["bat"]
+        // Format: "name version (source)" = ["bin1", "bin2"] lines inside a
+        // [v1] table, e.g.
+        // "bat 0.26.1 (registry+https://github.com/rust-lang/crates.io-index)" = ["bat"]
         static const QRegularExpression re(
-            QStringLiteral("^\\s*\"([a-zA-Z0-9_.+-]+) ([^\\s\"]+) \\([^)]*\\)\"\\s*="));
+            QStringLiteral("^\\s*\"([a-zA-Z0-9_.+-]+) ([^\\s\"]+) \\(([^)]*)\\)\"\\s*="
+                           "\\s*\\[([^\\]]*)\\]"));
         QTextStream stream(&listFile);
         while (!stream.atEnd()) {
             const QString line = stream.readLine();
             const auto match = re.match(line);
-            if (match.hasMatch()) {
-                Package pkg;
-                pkg.name = match.captured(1);
-                pkg.packageId = pkg.name;
-                pkg.version = match.captured(2);
-                pkg.backend = Backend::Cargo;
-                pkg.installed = true;
+            if (!match.hasMatch())
+                continue;
+            Package pkg;
+            pkg.name = match.captured(1);
+            pkg.packageId = pkg.name;
+            pkg.version = match.captured(2);
+            pkg.backend = Backend::Cargo;
+            pkg.installed = true;
+            const QString source = match.captured(3);
+            if (source.startsWith(QLatin1String("registry+")))
                 pkg.origin = QStringLiteral("crates.io");
-                result.append(pkg);
-            }
+            else if (source.startsWith(QLatin1String("git+")))
+                pkg.origin = QStringLiteral("git");
+            else if (source.startsWith(QLatin1String("path+")))
+                pkg.origin = i18n("local path");
+            else
+                pkg.origin = source;
+            QStringList binaries;
+            for (const QString &bin : match.captured(4).split(u','))
+                binaries.append(bin.trimmed().remove(u'"'));
+            pkg.binaries = binaries.join(QStringLiteral(", "));
+            result.append(pkg);
         }
     }
     return result;
@@ -296,13 +392,40 @@ void PackageManager::refreshUpdates()
 }
 
 void PackageManager::runOperation(const QString &label,
-                                  const QVector<Package> &packages, bool installOp)
+                                  const QVector<Package> &packages, Op op)
 {
     Q_EMIT started(label);
-    m_pool->start([this, label, packages, installOp] {
+    m_pool->start([this, label, packages, op] {
         QProcessEnvironment env = operationEnvironment();
         bool ok = true;
         QString lastError;
+
+        // Pacman must never be partially updated: one full "-Syu" upgrades the
+        // whole system (and the requested packages with it). Flatpak/cargo
+        // targets below update only their own packages.
+        if (op == Op::Update) {
+            const bool hasPacman = std::any_of(packages.cbegin(), packages.cend(),
+                                               [](const Package &p) {
+                                                   return p.backend == Backend::Pacman;
+                                               });
+            if (hasPacman) {
+                if (m_cancelled) {
+                    QMetaObject::invokeMethod(this, [this] {
+                        Q_EMIT finished(false, i18n("Cancelled"));
+                    }, Qt::QueuedConnection);
+                    return;
+                }
+                Q_EMIT progress(i18n("Upgrading system (pacman -Syu)…"));
+                QString output;
+                if (!runCommand({QStringLiteral("sudo"), QStringLiteral("pacman"),
+                                 QStringLiteral("-Syu"), QStringLiteral("--noconfirm")},
+                                env, &output, 3600000)) {
+                    ok = false;
+                    lastError = i18n("pacman -Syu: %1", output.right(400));
+                    Q_EMIT progress(i18n("Failed: pacman -Syu"));
+                }
+            }
+        }
 
         for (const Package &pkg : packages) {
             if (m_cancelled) {
@@ -310,34 +433,37 @@ void PackageManager::runOperation(const QString &label,
                 lastError = i18n("Cancelled");
                 break;
             }
+            // The full system upgrade above already covered pacman updates.
+            if (op == Op::Update && pkg.backend == Backend::Pacman)
+                continue;
             // The command line needs the concrete package id (Flatpak app id),
             // not the display name.
             const QString id = pkg.packageId.isEmpty() ? pkg.name : pkg.packageId;
             QStringList args;
             const QString pkgLabel = pkg.name;
             if (pkg.backend == Backend::Pacman) {
-                if (installOp)
+                if (op == Op::Install)
                     args << QStringLiteral("sudo") << QStringLiteral("pacman")
                          << QStringLiteral("-S") << QStringLiteral("--noconfirm") << id;
                 else
                     args << QStringLiteral("sudo") << QStringLiteral("pacman")
                          << QStringLiteral("-Rns") << QStringLiteral("--noconfirm") << id;
             } else if (pkg.backend == Backend::Flatpak) {
-                if (installOp)
-                    args << QStringLiteral("flatpak") << QStringLiteral("install")
-                         << QStringLiteral("-y") << id;
-                else
+                if (op == Op::Remove)
                     args << QStringLiteral("flatpak") << QStringLiteral("uninstall")
                          << QStringLiteral("-y") << id;
-            } else {
-                if (installOp)
-                    args << QStringLiteral("cargo") << QStringLiteral("install") << id;
                 else
+                    args << QStringLiteral("flatpak") << QStringLiteral("update")
+                         << QStringLiteral("-y") << id;
+            } else {
+                if (op == Op::Remove)
                     args << QStringLiteral("cargo") << QStringLiteral("uninstall") << id;
+                else
+                    args << QStringLiteral("cargo") << QStringLiteral("install") << id;
             }
 
-            Q_EMIT progress(installOp ? i18n("Installing %1…", pkgLabel)
-                                     : i18n("Removing %1…", pkgLabel));
+            Q_EMIT progress(op == Op::Remove ? i18n("Removing %1…", pkgLabel)
+                                             : i18n("Updating %1…", pkgLabel));
             QString output;
             if (!runCommand(args, env, &output, 1800000)) {
                 ok = false;
@@ -357,12 +483,17 @@ void PackageManager::runOperation(const QString &label,
 
 void PackageManager::install(const QVector<Package> &packages)
 {
-    runOperation(i18n("Installing selected packages…"), packages, true);
+    runOperation(i18n("Installing selected packages…"), packages, Op::Install);
 }
 
 void PackageManager::remove(const QVector<Package> &packages)
 {
-    runOperation(i18n("Removing selected packages…"), packages, false);
+    runOperation(i18n("Removing selected packages…"), packages, Op::Remove);
+}
+
+void PackageManager::update(const QVector<Package> &packages)
+{
+    runOperation(i18n("Updating packages…"), packages, Op::Update);
 }
 
 void PackageManager::cancel()

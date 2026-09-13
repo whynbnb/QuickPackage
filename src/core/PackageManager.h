@@ -24,6 +24,9 @@ public:
     void refreshUpdates();
     void install(const QVector<PackageModel::Package> &packages);
     void remove(const QVector<PackageModel::Package> &packages);
+    // Updates packages; pacman runs one full "pacman -Syu" so the system is
+    // never left in a partially upgraded state.
+    void update(const QVector<PackageModel::Package> &packages);
     void cancel();
 
     // Cancels pending work and blocks until all pool tasks finished, so no
@@ -47,6 +50,8 @@ public slots:
     void setProxy(const QString &httpUrl, const QString &socksUrl);
 
 private:
+    enum class Op { Install, Remove, Update };
+
     QVector<PackageModel::Package> queryPacman();
     QVector<PackageModel::Package> queryFlatpak();
     QVector<PackageModel::Package> queryCargo();
@@ -55,7 +60,7 @@ private:
     QSet<QString> cargoUpdateNames();
 
     void runOperation(const QString &label, const QVector<PackageModel::Package> &packages,
-                      bool installOp);
+                      Op op);
 
     QProcessEnvironment m_proxyEnv;
     QThreadPool *m_pool = nullptr;

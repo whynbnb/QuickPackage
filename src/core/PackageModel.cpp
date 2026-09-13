@@ -36,7 +36,7 @@ QVariant PackageModel::data(const QModelIndex &index, int role) const
     case IsSelectedRole:
         return pkg.selected;
     case SizeRole:
-        return pkg.origin;
+        return pkg.size;
     case OriginRole:
         return pkg.origin;
     case PackageIdRole:
@@ -60,6 +60,13 @@ QHash<int, QByteArray> PackageModel::roleNames() const
         {SizeRole, "size"},
         {OriginRole, "origin"},
         {PackageIdRole, "packageId"}};
+}
+
+PackageModel::Package PackageModel::packageAt(int row) const
+{
+    if (row < 0 || row >= m_packages.size())
+        return {};
+    return m_packages.at(row);
 }
 
 void PackageModel::setPackages(const QVector<Package> &packages)

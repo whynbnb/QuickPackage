@@ -26,6 +26,7 @@ set(QUICKPACKAGE_SOURCES
     src/core/PackageModel.cpp
     src/core/PackageManager.cpp
     src/core/ProxyManager.cpp
+    src/ui/DetailPanel.cpp
     src/ui/MainWindow.cpp
     src/ui/PackageCardDelegate.cpp
     src/ui/ProxyDialog.cpp
