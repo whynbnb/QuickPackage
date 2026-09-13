@@ -343,3 +343,21 @@ msgstr "AUR / 本地"
 
 msgid "local path"
 msgstr "本地路径"
+
+msgid "Package backends"
+msgstr "包管理后端"
+
+msgid "Enable pacman"
+msgstr "启用 pacman"
+
+msgid "Enable Flatpak"
+msgstr "启用 Flatpak"
+
+msgid "Enable Cargo"
+msgstr "启用 Cargo"
+
+msgid "All package backends are disabled. Enable at least one in Settings."
+msgstr "所有包管理后端均已关闭,请在设置中启用至少一个。"
+
+msgid "No package backends enabled"
+msgstr "未启用任何包管理后端"

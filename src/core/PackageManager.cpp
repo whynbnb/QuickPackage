@@ -88,6 +88,21 @@ void PackageManager::setProxy(const QString &httpUrl, const QString &socksUrl)
     }
 }
 
+void PackageManager::setBackendEnabled(PackageModel::Backend backend, bool enabled)
+{
+    switch (backend) {
+    case Backend::Pacman:
+        m_pacmanEnabled = enabled;
+        break;
+    case Backend::Flatpak:
+        m_flatpakEnabled = enabled;
+        break;
+    case Backend::Cargo:
+        m_cargoEnabled = enabled;
+        break;
+    }
+}
+
 QVector<Package> PackageManager::queryPacman()
 {
     QVector<Package> result;
@@ -320,9 +335,19 @@ void PackageManager::refreshCache()
     m_cancelled = false;
     Q_EMIT started(i18n("Loading package lists…"));
 
+    const int count = (m_pacmanEnabled ? 1 : 0) + (m_flatpakEnabled ? 1 : 0)
+        + (m_cargoEnabled ? 1 : 0);
+    if (count == 0) {
+        QMetaObject::invokeMethod(this, [this] {
+            Q_EMIT packagesLoaded({});
+            Q_EMIT finished(true, i18n("No package backends enabled"));
+        }, Qt::QueuedConnection);
+        return;
+    }
+
     auto results = std::make_shared<QVector<Package>>();
     auto mutex = std::make_shared<QMutex>();
-    auto remaining = std::make_shared<std::atomic<int>>(3);
+    auto remaining = std::make_shared<std::atomic<int>>(count);
     auto merge = [this, results, mutex, remaining](QVector<Package> part) {
         {
             QMutexLocker locker(mutex.get());
@@ -341,20 +366,33 @@ void PackageManager::refreshCache()
         }, Qt::QueuedConnection);
     };
 
-    m_pool->start([this, merge] { merge(queryPacman()); });
-    m_pool->start([this, merge] { merge(queryFlatpak()); });
-    m_pool->start([this, merge] { merge(queryCargo()); });
+    if (m_pacmanEnabled)
+        m_pool->start([this, merge] { merge(queryPacman()); });
+    if (m_flatpakEnabled)
+        m_pool->start([this, merge] { merge(queryFlatpak()); });
+    if (m_cargoEnabled)
+        m_pool->start([this, merge] { merge(queryCargo()); });
 }
 
 void PackageManager::refreshUpdates()
 {
     Q_EMIT started(i18n("Checking for updates…"));
 
+    const int count = (m_pacmanEnabled ? 1 : 0) + (m_flatpakEnabled ? 1 : 0)
+        + (m_cargoEnabled ? 1 : 0);
+    if (count == 0) {
+        QMetaObject::invokeMethod(this, [this] {
+            Q_EMIT updatesReady({}, {}, {});
+            Q_EMIT finished(true, i18n("No package backends enabled"));
+        }, Qt::QueuedConnection);
+        return;
+    }
+
     auto pacmanRes = std::make_shared<QSet<QString>>();
     auto flatpakRes = std::make_shared<QSet<QString>>();
     auto cargoRes = std::make_shared<QSet<QString>>();
     auto mutex = std::make_shared<QMutex>();
-    auto remaining = std::make_shared<std::atomic<int>>(3);
+    auto remaining = std::make_shared<std::atomic<int>>(count);
     auto merge = [this, pacmanRes, flatpakRes, cargoRes, mutex,
                   remaining](int which, QSet<QString> part) {
         {
@@ -386,9 +424,12 @@ void PackageManager::refreshUpdates()
         }, Qt::QueuedConnection);
     };
 
-    m_pool->start([this, merge] { merge(0, queryPacmanUpdates()); });
-    m_pool->start([this, merge] { merge(1, flatpakUpdateNames()); });
-    m_pool->start([this, merge] { merge(2, cargoUpdateNames()); });
+    if (m_pacmanEnabled)
+        m_pool->start([this, merge] { merge(0, queryPacmanUpdates()); });
+    if (m_flatpakEnabled)
+        m_pool->start([this, merge] { merge(1, flatpakUpdateNames()); });
+    if (m_cargoEnabled)
+        m_pool->start([this, merge] { merge(2, cargoUpdateNames()); });
 }
 
 void PackageManager::runOperation(const QString &label,

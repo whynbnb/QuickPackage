@@ -15,6 +15,7 @@ class QLineEdit;
 class QListView;
 class QProgressBar;
 class QPushButton;
+class QStackedWidget;
 class QToolButton;
 
 class DetailPanel;
@@ -47,6 +48,8 @@ private:
     void showUpdateDialog();
     void showProxyDialog();
     void showSettingsDialog();
+    void loadBackendSettings();
+    void applyEnabledBackends();
     void checkUpdatesOnStartup();
     void notify(const QString &eventId, const QString &title, const QString &text);
 
@@ -56,6 +59,8 @@ private:
     PackageFilterProxyModel *m_filterProxy = nullptr;
 
     QListView *m_listView = nullptr;
+    QStackedWidget *m_listStack = nullptr;
+    QLabel *m_backendsHint = nullptr;
     DetailPanel *m_detailPanel = nullptr;
     QLineEdit *m_searchEdit = nullptr;
     QButtonGroup *m_backendGroup = nullptr;
@@ -78,6 +83,9 @@ private:
     QSet<QString> m_cargoUpdates;
     bool m_updatesLoaded = false;
     bool m_loadOnStart = false;
+    bool m_pacmanEnabled = true;
+    bool m_flatpakEnabled = true;
+    bool m_cargoEnabled = true;
     int m_busyDepth = 0;
     bool m_inUserOperation = false;
     int m_lastNotifiedUpdates = -1;

@@ -21,6 +21,7 @@
 #include <QProgressBar>
 #include <QPushButton>
 #include <QSortFilterProxyModel>
+#include <QStackedWidget>
 #include <QStatusBar>
 #include <QTimer>
 #include <QToolButton>
@@ -197,6 +198,8 @@ MainWindow::MainWindow(QWidget *parent)
         m_schemeManager->activateSchemeId(QString());
 
     m_loadOnStart = group.readEntry("CheckUpdatesOnStart", true);
+    loadBackendSettings();
+    applyEnabledBackends();
     QTimer::singleShot(600, this, [this] {
         m_manager.refreshCache();
         if (m_loadOnStart)
@@ -273,13 +276,23 @@ void MainWindow::setupUi()
     m_listView->setMouseTracking(true);
     m_listView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 
+    // Hint page shown when every package backend is disabled
+    m_backendsHint = new QLabel(i18n("All package backends are disabled."
+                                     " Enable at least one in Settings."),
+                                central);
+    m_backendsHint->setAlignment(Qt::AlignCenter);
+    m_backendsHint->setWordWrap(true);
+    m_listStack = new QStackedWidget(central);
+    m_listStack->addWidget(m_listView);
+    m_listStack->addWidget(m_backendsHint);
+
     // Master-detail: click a card on the left to inspect and act on it
     m_detailPanel = new DetailPanel(central);
     m_detailPanel->setProxyEnvironment(m_manager.operationEnvironment());
     m_detailPanel->setFixedWidth(330);
     auto *split = new QHBoxLayout;
     split->setSpacing(10);
-    split->addWidget(m_listView, 1);
+    split->addWidget(m_listStack, 1);
     split->addWidget(m_detailPanel);
     layout->addLayout(split, 1);
 
@@ -468,8 +481,9 @@ void MainWindow::setBusy(bool busy, const QString &message)
             m_progressBar->hide();
     }
     const bool locked = m_busyDepth > 0;
+    const bool hasBackend = m_pacmanEnabled || m_flatpakEnabled || m_cargoEnabled;
     m_listView->setEnabled(!locked);
-    m_refreshButton->setEnabled(!locked);
+    m_refreshButton->setEnabled(!locked && hasBackend);
     m_searchEdit->setEnabled(!locked);
     m_btnAll->setEnabled(!locked);
     m_btnPacman->setEnabled(!locked);
@@ -613,7 +627,54 @@ void MainWindow::showProxyDialog()
 void MainWindow::showSettingsDialog()
 {
     SettingsDialog dialog(m_schemeManager, this);
+    connect(&dialog, &SettingsDialog::backendsChanged, this, [this] {
+        const bool oldPacman = m_pacmanEnabled;
+        const bool oldFlatpak = m_flatpakEnabled;
+        const bool oldCargo = m_cargoEnabled;
+        loadBackendSettings();
+        if (oldPacman == m_pacmanEnabled && oldFlatpak == m_flatpakEnabled
+            && oldCargo == m_cargoEnabled)
+            return;
+        applyEnabledBackends();
+        // Reload the package lists so the new backend set is reflected
+        m_manager.refreshCache();
+        m_manager.refreshUpdates();
+    });
     dialog.exec();
+}
+
+void MainWindow::loadBackendSettings()
+{
+    const KConfigGroup group =
+        KSharedConfig::openConfig(QStringLiteral("quickpackagerc"))
+            ->group(QStringLiteral("General"));
+    m_pacmanEnabled = group.readEntry("EnablePacman", true);
+    m_flatpakEnabled = group.readEntry("EnableFlatpak", true);
+    m_cargoEnabled = group.readEntry("EnableCargo", true);
+}
+
+void MainWindow::applyEnabledBackends()
+{
+    m_manager.setBackendEnabled(PackageModel::Backend::Pacman, m_pacmanEnabled);
+    m_manager.setBackendEnabled(PackageModel::Backend::Flatpak, m_flatpakEnabled);
+    m_manager.setBackendEnabled(PackageModel::Backend::Cargo, m_cargoEnabled);
+
+    m_btnPacman->setVisible(m_pacmanEnabled);
+    m_btnFlatpak->setVisible(m_flatpakEnabled);
+    m_btnCargo->setVisible(m_cargoEnabled);
+
+    const bool none = !m_pacmanEnabled && !m_flatpakEnabled && !m_cargoEnabled;
+    m_listStack->setCurrentWidget(none ? static_cast<QWidget *>(m_backendsHint)
+                                       : static_cast<QWidget *>(m_listView));
+    m_refreshButton->setEnabled(!none);
+
+    // If the current backend chip was disabled, fall back to the All chip
+    const int current = m_backendGroup->checkedId();
+    if ((current == int(PackageModel::Backend::Pacman) && !m_pacmanEnabled)
+        || (current == int(PackageModel::Backend::Flatpak) && !m_flatpakEnabled)
+        || (current == int(PackageModel::Backend::Cargo) && !m_cargoEnabled))
+        m_btnAll->setChecked(true);
+    updateCounters();
 }
 
 void MainWindow::notify(const QString &eventId, const QString &title, const QString &text)

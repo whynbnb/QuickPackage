@@ -35,6 +35,10 @@ public:
 
     QProcessEnvironment operationEnvironment() const;
 
+    // Enables/disables a backend; disabled backends are skipped by the
+    // refresh and update checks.
+    void setBackendEnabled(PackageModel::Backend backend, bool enabled);
+
 signals:
     void started(const QString &message);
     void progress(const QString &message);
@@ -65,6 +69,9 @@ private:
     QProcessEnvironment m_proxyEnv;
     QThreadPool *m_pool = nullptr;
     std::atomic<bool> m_cancelled{false};
+    bool m_pacmanEnabled = true;
+    bool m_flatpakEnabled = true;
+    bool m_cargoEnabled = true;
 };
 
 #endif
