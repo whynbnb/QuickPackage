@@ -72,7 +72,7 @@ public:
             return false;
         if (updatesOnly
             && static_cast<PackageModel::Status>(
-                   index.data(PackageModel::StatusRole).toInt())
+                    index.data(PackageModel::StatusRole).toInt())
                 != PackageModel::Status::NeedsUpdate)
             return false;
         if (searchText.isEmpty())
@@ -83,6 +83,14 @@ public:
         return name.contains(searchText, Qt::CaseInsensitive)
             || packageId.contains(searchText, Qt::CaseInsensitive)
             || description.contains(searchText, Qt::CaseInsensitive);
+    }
+
+protected:
+    bool lessThan(const QModelIndex &left, const QModelIndex &right) const override
+    {
+        const QString a = left.data(PackageModel::NameRole).toString();
+        const QString b = right.data(PackageModel::NameRole).toString();
+        return a.compare(b, Qt::CaseInsensitive) < 0;
     }
 };
 
@@ -95,6 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
     m_model = new PackageModel(this);
     m_filterProxy = new PackageFilterProxyModel;
     m_filterProxy->setSourceModel(m_model);
+    m_filterProxy->sort(0, Qt::AscendingOrder);
 
     setupUi();
     setupActions();
