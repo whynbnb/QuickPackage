@@ -32,6 +32,12 @@ QString backendName(Backend backend)
         return i18n("Flatpak");
     case Backend::Cargo:
         return i18n("Cargo");
+    case Backend::Mise:
+        return i18n("Mise");
+    case Backend::Rustup:
+        return i18n("Rustup");
+    case Backend::Fvm:
+        return i18n("FVM");
     }
     return {};
 }
@@ -45,6 +51,12 @@ QColor backendColor(Backend backend)
         return QColor(64, 160, 140);
     case Backend::Cargo:
         return QColor(207, 90, 33);
+    case Backend::Mise:
+        return QColor(190, 145, 0);
+    case Backend::Rustup:
+        return QColor(190, 70, 110);
+    case Backend::Fvm:
+        return QColor(100, 115, 165);
     }
     return {};
 }

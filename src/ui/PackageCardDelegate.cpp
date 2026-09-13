@@ -94,6 +94,15 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     case PackageModel::Backend::Cargo:
         iconName = QStringLiteral("rust");
         break;
+    case PackageModel::Backend::Mise:
+        iconName = QStringLiteral("applications-engineering");
+        break;
+    case PackageModel::Backend::Rustup:
+        iconName = QStringLiteral("applications-development");
+        break;
+    case PackageModel::Backend::Fvm:
+        iconName = QStringLiteral("smartphone");
+        break;
     }
     const QIcon icon = QIcon::fromTheme(iconName,
                                         QIcon::fromTheme(QStringLiteral("package-x-generic")));
@@ -133,6 +142,18 @@ void PackageCardDelegate::paint(QPainter *painter, const QStyleOptionViewItem &o
     case PackageModel::Backend::Cargo:
         backendTag = i18n("Cargo");
         tagColor = QColor(207, 90, 33);
+        break;
+    case PackageModel::Backend::Mise:
+        backendTag = i18n("Mise");
+        tagColor = QColor(190, 145, 0);
+        break;
+    case PackageModel::Backend::Rustup:
+        backendTag = i18n("Rustup");
+        tagColor = QColor(190, 70, 110);
+        break;
+    case PackageModel::Backend::Fvm:
+        backendTag = i18n("FVM");
+        tagColor = QColor(100, 115, 165);
         break;
     }
     QFont tagFont = option.font;

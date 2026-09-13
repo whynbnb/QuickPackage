@@ -12,7 +12,9 @@ class PackageModel : public QAbstractListModel
     Q_OBJECT
 
 public:
-    enum class Backend { Pacman = 0, Flatpak, Cargo };
+    // System backends (Pacman/Flatpak/Cargo) and optional developer tool
+    // managers (Mise/Rustup/Fvm), which are disabled by default.
+    enum class Backend { Pacman = 0, Flatpak, Cargo, Mise, Rustup, Fvm };
     Q_ENUM(Backend)
 
     enum class Status { Idle = 0, Installed, Updating, Removing, Failed, NeedsUpdate };

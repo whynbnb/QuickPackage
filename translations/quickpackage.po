@@ -365,8 +365,44 @@ msgstr "未启用任何包管理后端"
 msgid "AUR"
 msgstr "AUR"
 
+msgid "global"
+msgstr "全局"
+
 msgid "Upgrading AUR packages (%1 -Sua)…"
 msgstr "正在升级 AUR 包(%1 -Sua)…"
 
 msgid "No AUR helper (paru or yay) found"
 msgstr "未找到 AUR 助手(需要 paru 或 yay)"
+
+msgid "Mise"
+msgstr "Mise"
+
+msgid "Rustup"
+msgstr "Rustup"
+
+msgid "FVM"
+msgstr "FVM"
+
+msgid "Developer tools"
+msgstr "开发者工具"
+
+msgid "System packages"
+msgstr "系统包"
+
+msgid "Developer packages"
+msgstr "开发包"
+
+msgid "Enable mise"
+msgstr "启用 mise"
+
+msgid "Enable rustup"
+msgstr "启用 rustup"
+
+msgid "Enable fvm"
+msgstr "启用 fvm"
+
+msgid "Upgrading mise tools (mise upgrade)…"
+msgstr "正在升级 mise 工具(mise upgrade)…"
+
+msgid "Upgrading rustup toolchains (rustup update)…"
+msgstr "正在升级 rustup 工具链(rustup update)…"

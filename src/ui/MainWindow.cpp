@@ -32,40 +32,51 @@ using Package = PackageModel::Package;
 namespace {
     // Must not be -1: QButtonGroup::addButton(btn, -1) means "auto-assign id"
     // (negative ids starting at -2), so the All button would never get -1 and
-    // checkedId() would return -2, filtering out every row.
-    constexpr int BackendAll = 3;
+    // checkedId() would return -2, filtering out every row. The pseudo-filter
+    // ids sit above every PackageModel::Backend value.
+    constexpr int BackendAll = 100;
     // AUR pseudo-filter: foreign (AUR/local) pacman packages.
-    constexpr int BackendAur = 4;
+    constexpr int BackendAur = 101;
 
-QString backendLabel(PackageModel::Backend backend)
-{
-    switch (backend) {
-    case PackageModel::Backend::Pacman:
-        return i18n("Pacman");
-    case PackageModel::Backend::Flatpak:
-        return i18n("Flatpak");
-    case PackageModel::Backend::Cargo:
-        return i18n("Cargo");
+    QString backendLabel(PackageModel::Backend backend)
+    {
+        switch (backend) {
+        case PackageModel::Backend::Pacman:
+            return i18n("Pacman");
+        case PackageModel::Backend::Flatpak:
+            return i18n("Flatpak");
+        case PackageModel::Backend::Cargo:
+            return i18n("Cargo");
+        case PackageModel::Backend::Mise:
+            return i18n("Mise");
+        case PackageModel::Backend::Rustup:
+            return i18n("Rustup");
+        case PackageModel::Backend::Fvm:
+            return i18n("FVM");
+        }
+        return {};
     }
-    return {};
-}
 } // namespace
 
 class MainWindow::PackageFilterProxyModel : public QSortFilterProxyModel
 {
 public:
-    void applyFilter(const QString &text, int backendFilter, bool updatesOnlyFilter)
+    void applyFilter(const QString &text, int backendFilter, bool updatesOnlyFilter,
+                     bool devModeFilter)
     {
         beginFilterChange();
         searchText = text;
         backend = backendFilter;
         updatesOnly = updatesOnlyFilter;
+        devMode = devModeFilter;
         endFilterChange(QSortFilterProxyModel::Direction::Rows);
     }
 
     QString searchText;
     int backend = BackendAll;
     bool updatesOnly = false;
+    // Big switch: system packages vs developer tools
+    bool devMode = false;
 
     bool filterAcceptsRow(int sourceRow, const QModelIndex &sourceParent) const override
     {
@@ -73,6 +84,12 @@ public:
         const auto rowBackend = static_cast<PackageModel::Backend>(
             index.data(PackageModel::BackendRole).toInt());
         const bool foreign = index.data(PackageModel::IsForeignRole).toBool();
+        // The big switch splits system backends from developer tools
+        const bool devBackend = rowBackend == PackageModel::Backend::Mise
+            || rowBackend == PackageModel::Backend::Rustup
+            || rowBackend == PackageModel::Backend::Fvm;
+        if (devMode ? !devBackend : devBackend)
+            return false;
         if (backend == BackendAur) {
             // AUR pseudo-filter: foreign pacman packages
             if (rowBackend != PackageModel::Backend::Pacman || !foreign)
@@ -132,42 +149,24 @@ MainWindow::MainWindow(QWidget *parent)
             [this](const QVector<Package> &packages) {
                 m_model->setPackages(packages);
                 if (m_updatesLoaded) {
-                    for (const QString &name : std::as_const(m_pacmanUpdates))
-                        m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
-                                                     PackageModel::Status::NeedsUpdate);
-                    for (const QString &name : std::as_const(m_aurUpdates))
-                        m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
-                                                     PackageModel::Status::NeedsUpdate);
-                    for (const QString &name : std::as_const(m_flatpakUpdates))
-                        m_model->updatePackageStatus(name, PackageModel::Backend::Flatpak,
-                                                     PackageModel::Status::NeedsUpdate);
-                    for (const QString &name : std::as_const(m_cargoUpdates))
-                        m_model->updatePackageStatus(name, PackageModel::Backend::Cargo,
-                                                     PackageModel::Status::NeedsUpdate);
+                    for (auto it = m_updates.constBegin(); it != m_updates.constEnd(); ++it)
+                        for (const QString &name : it.value())
+                            m_model->updatePackageStatus(
+                                name, static_cast<PackageModel::Backend>(it.key()),
+                                PackageModel::Status::NeedsUpdate);
                 }
                 updateCounters();
             });
     connect(&m_manager, &PackageManager::updatesReady, this,
-            [this](const QSet<QString> &pacman, const QSet<QString> &aur,
-                   const QSet<QString> &flatpak, const QSet<QString> &cargo) {
-                m_pacmanUpdates = pacman;
-                m_aurUpdates = aur;
-                m_flatpakUpdates = flatpak;
-                m_cargoUpdates = cargo;
+            [this](const QHash<int, QSet<QString>> &updates) {
+                m_updates = updates;
                 m_updatesLoaded = true;
 
-                for (const QString &name : std::as_const(m_pacmanUpdates))
-                    m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
-                                                 PackageModel::Status::NeedsUpdate);
-                for (const QString &name : std::as_const(m_aurUpdates))
-                    m_model->updatePackageStatus(name, PackageModel::Backend::Pacman,
-                                                 PackageModel::Status::NeedsUpdate);
-                for (const QString &name : std::as_const(m_flatpakUpdates))
-                    m_model->updatePackageStatus(name, PackageModel::Backend::Flatpak,
-                                                 PackageModel::Status::NeedsUpdate);
-                for (const QString &name : std::as_const(m_cargoUpdates))
-                    m_model->updatePackageStatus(name, PackageModel::Backend::Cargo,
-                                                 PackageModel::Status::NeedsUpdate);
+                for (auto it = m_updates.constBegin(); it != m_updates.constEnd(); ++it)
+                    for (const QString &name : it.value())
+                        m_model->updatePackageStatus(
+                            name, static_cast<PackageModel::Backend>(it.key()),
+                            PackageModel::Status::NeedsUpdate);
 
                 const int count = m_model->updateCount();
                 m_updatesButton->setEnabled(count > 0);
@@ -254,6 +253,32 @@ void MainWindow::setupUi()
 
     layout->addLayout(topBar);
 
+    // Big mode switch: system packages vs developer tools
+    m_modeGroup = new QButtonGroup(this);
+    m_modeGroup->setExclusive(true);
+    m_btnSystem = new QToolButton(central);
+    m_btnSystem->setText(i18n("System packages"));
+    m_btnSystem->setIcon(QIcon::fromTheme(QStringLiteral("applications-system")));
+    m_btnSystem->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_btnSystem->setCheckable(true);
+    m_btnSystem->setChecked(true);
+    QFont modeFont = m_btnSystem->font();
+    modeFont.setBold(true);
+    m_btnSystem->setFont(modeFont);
+    m_modeGroup->addButton(m_btnSystem, 0);
+    topBar->insertWidget(0, m_btnSystem);
+
+    m_btnDev = new QToolButton(central);
+    m_btnDev->setText(i18n("Developer packages"));
+    m_btnDev->setIcon(QIcon::fromTheme(QStringLiteral("applications-development")));
+    m_btnDev->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
+    m_btnDev->setCheckable(true);
+    m_btnDev->setFont(modeFont);
+    // The developer side only exists when a dev backend is enabled in Settings
+    m_btnDev->setVisible(false);
+    m_modeGroup->addButton(m_btnDev, 1);
+    topBar->insertWidget(1, m_btnDev);
+
     // Flat category chips: always-visible, one-click source filtering
     auto *chipsRow = new QHBoxLayout;
     chipsRow->setSpacing(6);
@@ -277,6 +302,17 @@ void MainWindow::setupUi()
                             int(PackageModel::Backend::Flatpak));
     m_btnCargo = makeChip(backendLabel(PackageModel::Backend::Cargo),
                           int(PackageModel::Backend::Cargo));
+
+    // Developer tool chips: only visible in developer mode
+    m_btnMise = makeChip(backendLabel(PackageModel::Backend::Mise),
+                         int(PackageModel::Backend::Mise));
+    m_btnRustup = makeChip(backendLabel(PackageModel::Backend::Rustup),
+                           int(PackageModel::Backend::Rustup));
+    m_btnFvm = makeChip(backendLabel(PackageModel::Backend::Fvm),
+                        int(PackageModel::Backend::Fvm));
+    m_btnMise->setVisible(false);
+    m_btnRustup->setVisible(false);
+    m_btnFvm->setVisible(false);
     m_btnAll->setChecked(true);
     chipsRow->addStretch();
 
@@ -350,6 +386,8 @@ void MainWindow::setupUi()
             [this](const QString &) { refreshFilterProxy(); });
     connect(m_backendGroup, &QButtonGroup::idClicked, this,
             [this](int) { refreshFilterProxy(); });
+    connect(m_modeGroup, &QButtonGroup::idClicked, this,
+            [this](int id) { setDevMode(id == 1); });
     connect(m_btnUpdates, &QToolButton::toggled, this,
             [this](bool) { refreshFilterProxy(); });
     connect(m_refreshButton, &QPushButton::clicked, this,
@@ -432,9 +470,18 @@ void MainWindow::refreshFilterProxy()
 {
     m_filterProxy->applyFilter(m_searchEdit->text().trimmed(),
                                m_backendGroup->checkedId(),
-                               m_btnUpdates->isChecked());
+                               m_btnUpdates->isChecked(), m_devMode);
     // Reset the scroll position so a smaller result set is never shown blank
     m_listView->scrollToTop();
+}
+
+void MainWindow::setDevMode(bool dev)
+{
+    if (m_devMode == dev)
+        return;
+    m_devMode = dev;
+    refreshModeUi();
+    updateCounters();
 }
 
 void MainWindow::updateCounters()
@@ -450,6 +497,7 @@ void MainWindow::updateCounters()
     // pending updates are visible at a glance. AUR (foreign pacman) packages
     // get their own chip, so the pacman chip excludes them.
     int pacman = 0, aur = 0, flatpak = 0, cargo = 0, aurUpdates = 0;
+    int mise = 0, rustup = 0, fvm = 0, devUpdates = 0;
     const int rows = m_model->rowCount();
     for (int row = 0; row < rows; ++row) {
         const QModelIndex index = m_model->index(row);
@@ -474,6 +522,21 @@ void MainWindow::updateCounters()
         case PackageModel::Backend::Cargo:
             ++cargo;
             break;
+        case PackageModel::Backend::Mise:
+            ++mise;
+            if (needsUpdate)
+                ++devUpdates;
+            break;
+        case PackageModel::Backend::Rustup:
+            ++rustup;
+            if (needsUpdate)
+                ++devUpdates;
+            break;
+        case PackageModel::Backend::Fvm:
+            ++fvm;
+            if (needsUpdate)
+                ++devUpdates;
+            break;
         }
     }
     auto chipText = [](const QString &label, int total, int updates) {
@@ -481,7 +544,12 @@ void MainWindow::updateCounters()
             return i18n("%1 (%2, %3 updates)", label, total, updates);
         return i18n("%1 (%2)", label, total);
     };
-    m_btnAll->setText(chipText(i18n("All"), pacman + aur + flatpak + cargo, updates));
+    // The All chip only counts the packages of the active mode
+    if (m_devMode)
+        m_btnAll->setText(chipText(i18n("All"), mise + rustup + fvm, devUpdates));
+    else
+        m_btnAll->setText(chipText(i18n("All"), pacman + aur + flatpak + cargo,
+                                   updates - devUpdates));
     m_btnPacman->setText(chipText(i18n("Pacman"), pacman,
                                   m_model->updateCount(PackageModel::Backend::Pacman)
                                       - aurUpdates));
@@ -490,6 +558,12 @@ void MainWindow::updateCounters()
                                    m_model->updateCount(PackageModel::Backend::Flatpak)));
     m_btnCargo->setText(chipText(i18n("Cargo"), cargo,
                                  m_model->updateCount(PackageModel::Backend::Cargo)));
+    m_btnMise->setText(chipText(i18n("Mise"), mise,
+                                m_model->updateCount(PackageModel::Backend::Mise)));
+    m_btnRustup->setText(chipText(i18n("Rustup"), rustup,
+                                  m_model->updateCount(PackageModel::Backend::Rustup)));
+    m_btnFvm->setText(chipText(i18n("FVM"), fvm,
+                               m_model->updateCount(PackageModel::Backend::Fvm)));
 
     m_btnUpdates->setText(i18n("Updates (%1)", updates));
     QFont chipFont = m_btnUpdates->font();
@@ -525,6 +599,9 @@ void MainWindow::setBusy(bool busy, const QString &message)
     m_btnAur->setEnabled(!locked);
     m_btnFlatpak->setEnabled(!locked);
     m_btnCargo->setEnabled(!locked);
+    m_btnMise->setEnabled(!locked);
+    m_btnRustup->setEnabled(!locked);
+    m_btnFvm->setEnabled(!locked);
     m_btnUpdates->setEnabled(!locked);
     if (locked) {
         m_installButton->setEnabled(false);
@@ -668,9 +745,13 @@ void MainWindow::showSettingsDialog()
         const bool oldPacman = m_pacmanEnabled;
         const bool oldFlatpak = m_flatpakEnabled;
         const bool oldCargo = m_cargoEnabled;
+        const bool oldMise = m_miseEnabled;
+        const bool oldRustup = m_rustupEnabled;
+        const bool oldFvm = m_fvmEnabled;
         loadBackendSettings();
         if (oldPacman == m_pacmanEnabled && oldFlatpak == m_flatpakEnabled
-            && oldCargo == m_cargoEnabled)
+            && oldCargo == m_cargoEnabled && oldMise == m_miseEnabled
+            && oldRustup == m_rustupEnabled && oldFvm == m_fvmEnabled)
             return;
         applyEnabledBackends();
         // Reload the package lists so the new backend set is reflected
@@ -688,6 +769,10 @@ void MainWindow::loadBackendSettings()
     m_pacmanEnabled = group.readEntry("EnablePacman", true);
     m_flatpakEnabled = group.readEntry("EnableFlatpak", true);
     m_cargoEnabled = group.readEntry("EnableCargo", true);
+    // Developer tool backends are optional and disabled by default.
+    m_miseEnabled = group.readEntry("EnableMise", false);
+    m_rustupEnabled = group.readEntry("EnableRustup", false);
+    m_fvmEnabled = group.readEntry("EnableFvm", false);
 }
 
 void MainWindow::applyEnabledBackends()
@@ -695,25 +780,63 @@ void MainWindow::applyEnabledBackends()
     m_manager.setBackendEnabled(PackageModel::Backend::Pacman, m_pacmanEnabled);
     m_manager.setBackendEnabled(PackageModel::Backend::Flatpak, m_flatpakEnabled);
     m_manager.setBackendEnabled(PackageModel::Backend::Cargo, m_cargoEnabled);
+    m_manager.setBackendEnabled(PackageModel::Backend::Mise, m_miseEnabled);
+    m_manager.setBackendEnabled(PackageModel::Backend::Rustup, m_rustupEnabled);
+    m_manager.setBackendEnabled(PackageModel::Backend::Fvm, m_fvmEnabled);
 
-    m_btnPacman->setVisible(m_pacmanEnabled);
-    m_btnAur->setVisible(m_pacmanEnabled);
-    m_btnFlatpak->setVisible(m_flatpakEnabled);
-    m_btnCargo->setVisible(m_cargoEnabled);
+    refreshModeUi();
+    updateCounters();
+}
 
-    const bool none = !m_pacmanEnabled && !m_flatpakEnabled && !m_cargoEnabled;
+void MainWindow::refreshModeUi()
+{
+    const bool devAvailable = m_miseEnabled || m_rustupEnabled || m_fvmEnabled;
+    const bool sysNone = !m_pacmanEnabled && !m_flatpakEnabled && !m_cargoEnabled;
+    const bool devNone = !devAvailable;
+
+    // Auto-switch: developer side only exists with an enabled dev backend;
+    // if every system backend is disabled, jump to the developer side.
+    if (m_devMode && devNone)
+        m_devMode = false;
+    if (sysNone && !devNone && !m_devMode)
+        m_devMode = true;
+    m_btnSystem->setChecked(!m_devMode);
+    m_btnDev->setChecked(m_devMode);
+    m_btnDev->setVisible(devAvailable);
+
+    // Chips of the other mode stay hidden
+    m_btnPacman->setVisible(!m_devMode && m_pacmanEnabled);
+    m_btnAur->setVisible(!m_devMode && m_pacmanEnabled);
+    m_btnFlatpak->setVisible(!m_devMode && m_flatpakEnabled);
+    m_btnCargo->setVisible(!m_devMode && m_cargoEnabled);
+    m_btnMise->setVisible(m_devMode && m_miseEnabled);
+    m_btnRustup->setVisible(m_devMode && m_rustupEnabled);
+    m_btnFvm->setVisible(m_devMode && m_fvmEnabled);
+
+    // Hint page when the current mode has no enabled backend
+    const bool none = m_devMode ? devNone : sysNone;
     m_listStack->setCurrentWidget(none ? static_cast<QWidget *>(m_backendsHint)
                                        : static_cast<QWidget *>(m_listView));
     m_refreshButton->setEnabled(!none);
 
-    // If the current backend chip was disabled, fall back to the All chip
+    // Fall back to the All chip when the current chip is hidden (mode change
+    // or backend disabled)
     const int current = m_backendGroup->checkedId();
-    if ((current == int(PackageModel::Backend::Pacman) && !m_pacmanEnabled)
-        || (current == BackendAur && !m_pacmanEnabled)
-        || (current == int(PackageModel::Backend::Flatpak) && !m_flatpakEnabled)
-        || (current == int(PackageModel::Backend::Cargo) && !m_cargoEnabled))
+    if ((current == int(PackageModel::Backend::Pacman)
+             && (!m_pacmanEnabled || m_devMode))
+        || (current == BackendAur && (!m_pacmanEnabled || m_devMode))
+        || (current == int(PackageModel::Backend::Flatpak)
+            && (!m_flatpakEnabled || m_devMode))
+        || (current == int(PackageModel::Backend::Cargo)
+            && (!m_cargoEnabled || m_devMode))
+        || (current == int(PackageModel::Backend::Mise)
+            && (!m_miseEnabled || !m_devMode))
+        || (current == int(PackageModel::Backend::Rustup)
+            && (!m_rustupEnabled || !m_devMode))
+        || (current == int(PackageModel::Backend::Fvm)
+            && (!m_fvmEnabled || !m_devMode)))
         m_btnAll->setChecked(true);
-    updateCounters();
+    refreshFilterProxy();
 }
 
 void MainWindow::notify(const QString &eventId, const QString &title, const QString &text)

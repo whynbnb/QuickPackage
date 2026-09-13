@@ -51,6 +51,17 @@ SettingsDialog::SettingsDialog(KColorSchemeManager *schemes, QWidget *parent)
     backendLayout->addWidget(m_cargoCheck);
     layout->addWidget(backendGroup);
 
+    // Developer tool managers are optional and disabled by default
+    auto *devGroup = new QGroupBox(i18n("Developer tools"), this);
+    auto *devLayout = new QVBoxLayout(devGroup);
+    m_miseCheck = new QCheckBox(i18n("Enable mise"), devGroup);
+    devLayout->addWidget(m_miseCheck);
+    m_rustupCheck = new QCheckBox(i18n("Enable rustup"), devGroup);
+    devLayout->addWidget(m_rustupCheck);
+    m_fvmCheck = new QCheckBox(i18n("Enable fvm"), devGroup);
+    devLayout->addWidget(m_fvmCheck);
+    layout->addWidget(devGroup);
+
     auto *note = new QLabel(i18n("Language changes apply after restart."), this);
     note->setWordWrap(true);
     layout->addWidget(note);
@@ -75,6 +86,13 @@ SettingsDialog::SettingsDialog(KColorSchemeManager *schemes, QWidget *parent)
     m_flatpakCheck->setChecked(m_flatpakEnabled);
     m_cargoEnabled = group.readEntry("EnableCargo", true);
     m_cargoCheck->setChecked(m_cargoEnabled);
+    // Developer tool backends are optional and disabled by default.
+    m_miseEnabled = group.readEntry("EnableMise", false);
+    m_miseCheck->setChecked(m_miseEnabled);
+    m_rustupEnabled = group.readEntry("EnableRustup", false);
+    m_rustupCheck->setChecked(m_rustupEnabled);
+    m_fvmEnabled = group.readEntry("EnableFvm", false);
+    m_fvmCheck->setChecked(m_fvmEnabled);
 }
 
 void SettingsDialog::apply()
@@ -86,14 +104,25 @@ void SettingsDialog::apply()
     const bool pacmanEnabled = m_pacmanCheck->isChecked();
     const bool flatpakEnabled = m_flatpakCheck->isChecked();
     const bool cargoEnabled = m_cargoCheck->isChecked();
+    const bool miseEnabled = m_miseCheck->isChecked();
+    const bool rustupEnabled = m_rustupCheck->isChecked();
+    const bool fvmEnabled = m_fvmCheck->isChecked();
     const bool backendChanged = pacmanEnabled != m_pacmanEnabled
-        || flatpakEnabled != m_flatpakEnabled || cargoEnabled != m_cargoEnabled;
+        || flatpakEnabled != m_flatpakEnabled || cargoEnabled != m_cargoEnabled
+        || miseEnabled != m_miseEnabled || rustupEnabled != m_rustupEnabled
+        || fvmEnabled != m_fvmEnabled;
     m_pacmanEnabled = pacmanEnabled;
     m_flatpakEnabled = flatpakEnabled;
     m_cargoEnabled = cargoEnabled;
+    m_miseEnabled = miseEnabled;
+    m_rustupEnabled = rustupEnabled;
+    m_fvmEnabled = fvmEnabled;
     group.writeEntry("EnablePacman", pacmanEnabled);
     group.writeEntry("EnableFlatpak", flatpakEnabled);
     group.writeEntry("EnableCargo", cargoEnabled);
+    group.writeEntry("EnableMise", miseEnabled);
+    group.writeEntry("EnableRustup", rustupEnabled);
+    group.writeEntry("EnableFvm", fvmEnabled);
 
     const QString language = m_languageCombo->currentData().toString();
     group.writeEntry("Language", language);

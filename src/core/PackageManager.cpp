@@ -3,6 +3,7 @@
 #include <KLocalizedString>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QMutex>
 #include <QProcess>
 #include <QRegularExpression>
@@ -45,6 +46,9 @@ PackageManager::PackageManager(QObject *parent)
     , m_pool(new QThreadPool(this))
 {
     m_pool->setMaxThreadCount(4);
+    // Child processes must always inherit the user environment; setProxy()
+    // only runs when a proxy is actually configured.
+    m_proxyEnv = QProcessEnvironment::systemEnvironment();
 }
 
 PackageManager::~PackageManager()
@@ -100,6 +104,15 @@ void PackageManager::setBackendEnabled(PackageModel::Backend backend, bool enabl
         break;
     case Backend::Cargo:
         m_cargoEnabled = enabled;
+        break;
+    case Backend::Mise:
+        m_miseEnabled = enabled;
+        break;
+    case Backend::Rustup:
+        m_rustupEnabled = enabled;
+        break;
+    case Backend::Fvm:
+        m_fvmEnabled = enabled;
         break;
     }
 }
@@ -283,6 +296,98 @@ QVector<Package> PackageManager::queryCargo()
     return result;
 }
 
+QVector<Package> PackageManager::queryMise()
+{
+    QVector<Package> result;
+    QString output;
+    if (!runCommand({QStringLiteral("mise"), QStringLiteral("ls")},
+                    operationEnvironment(), &output, 120000))
+        return result;
+    // Rows: "tool version config-path requested", e.g.
+    // "go    1.25.3  ~/.config/mise/config.toml  latest". A tool with
+    // several installed versions gets one row per version.
+    for (const QString &line : output.split(u'\n')) {
+        const QStringList toks = line.trimmed().split(QRegularExpression(QStringLiteral("\\s+")));
+        if (toks.size() < 2 || toks.first().isEmpty()
+            || toks.first() == QLatin1String("Tool"))
+            continue;
+        Package pkg;
+        pkg.name = toks.at(0);
+        pkg.version = toks.at(1);
+        pkg.packageId = pkg.name + u'@' + pkg.version;
+        pkg.origin = toks.value(2);
+        pkg.backend = Backend::Mise;
+        pkg.installed = true;
+        result.append(pkg);
+    }
+    return result;
+}
+
+QVector<Package> PackageManager::queryRustup()
+{
+    QVector<Package> result;
+    QString output;
+    if (!runCommand({QStringLiteral("rustup"), QStringLiteral("toolchain"), QStringLiteral("list")},
+                    operationEnvironment(), &output, 120000))
+        return result;
+    // Rows: "stable-x86_64-unknown-linux-gnu" or
+    // "nightly-x86_64-unknown-linux-gnu (active, default)".
+    for (const QString &line : output.split(u'\n')) {
+        const QString trimmed = line.trimmed();
+        if (trimmed.isEmpty())
+            continue;
+        const int paren = trimmed.indexOf(u'(');
+        Package pkg;
+        pkg.name = (paren < 0 ? trimmed : trimmed.left(paren)).trimmed();
+        if (paren >= 0)
+            pkg.origin = trimmed.mid(paren + 1).chopped(1).trimmed();
+        pkg.packageId = pkg.name;
+        pkg.backend = Backend::Rustup;
+        pkg.installed = true;
+        result.append(pkg);
+    }
+    return result;
+}
+
+QVector<Package> PackageManager::queryFvm()
+{
+    QVector<Package> result;
+    // "fvm list" is slow and its text output changed across releases; the
+    // versions directory itself is the authoritative source. fvm honours
+    // FVM_CACHE, with ~/.fvm/versions and ~/fvm/versions as defaults.
+    QString versionsDir = qEnvironmentVariable("FVM_CACHE");
+    if (versionsDir.isEmpty() || !QDir(versionsDir).exists()) {
+        versionsDir.clear();
+        for (const QString &candidate :
+             {QStringLiteral(".fvm/versions"), QStringLiteral("fvm/versions")}) {
+            const QString path = QDir::home().absoluteFilePath(candidate);
+            if (QDir(path).exists()) {
+                versionsDir = path;
+                break;
+            }
+        }
+    }
+    if (versionsDir.isEmpty())
+        return result;
+    const QDir dir(versionsDir);
+    // The global version is a "default" symlink next to the versions directory
+    const QString defaultTarget =
+        QFileInfo(dir.absoluteFilePath(QStringLiteral("../default"))).canonicalFilePath();
+    const QStringList versions = dir.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name);
+    for (const QString &version : versions) {
+        Package pkg;
+        pkg.name = version;
+        if (!defaultTarget.isEmpty()
+            && QFileInfo(dir.absoluteFilePath(version)).canonicalFilePath() == defaultTarget)
+            pkg.origin = i18n("global");
+        pkg.packageId = pkg.name;
+        pkg.backend = Backend::Fvm;
+        pkg.installed = true;
+        result.append(pkg);
+    }
+    return result;
+}
+
 QSet<QString> PackageManager::queryPacmanUpdates()
 {
     QSet<QString> updates;
@@ -329,6 +434,44 @@ QSet<QString> PackageManager::aurUpdateNames()
     return updates;
 }
 
+QSet<QString> PackageManager::miseUpdateNames()
+{
+    QSet<QString> updates;
+    QString output;
+    if (!runCommand({QStringLiteral("mise"), QStringLiteral("outdated")},
+                    operationEnvironment(), &output, 120000))
+        return updates;
+    // Rows: "go    latest  1.25.3  1.27.1 ~/.config/mise/config.toml" — only
+    // tools with a newer version available are listed.
+    for (const QString &line : output.split(u'\n')) {
+        const int sp = line.indexOf(u' ');
+        if (sp > 0)
+            updates.insert(line.left(sp));
+    }
+    return updates;
+}
+
+QSet<QString> PackageManager::rustupUpdateNames()
+{
+    QSet<QString> updates;
+    QString output;
+    if (!runCommand({QStringLiteral("rustup"), QStringLiteral("check")},
+                    operationEnvironment(), &output, 120000))
+        return updates;
+    // Rows: "<toolchain> - up to date: …" / "<toolchain> - Update available: …"
+    for (const QString &line : output.split(u'\n')) {
+        const QString trimmed = line.trimmed();
+        if (!trimmed.contains(QLatin1String(" - ")))
+            continue;
+        if (!trimmed.contains(QLatin1String("Update available")))
+            continue;
+        const QString name = trimmed.section(QStringLiteral(" - "), 0, 0).trimmed();
+        if (!name.isEmpty())
+            updates.insert(name);
+    }
+    return updates;
+}
+
 QSet<QString> PackageManager::flatpakUpdateNames()
 {
     QSet<QString> updates;
@@ -369,7 +512,8 @@ void PackageManager::refreshCache()
     Q_EMIT started(i18n("Loading package lists…"));
 
     const int count = (m_pacmanEnabled ? 1 : 0) + (m_flatpakEnabled ? 1 : 0)
-        + (m_cargoEnabled ? 1 : 0);
+        + (m_cargoEnabled ? 1 : 0) + (m_miseEnabled ? 1 : 0) + (m_rustupEnabled ? 1 : 0)
+        + (m_fvmEnabled ? 1 : 0);
     if (count == 0) {
         QMetaObject::invokeMethod(this, [this] {
             Q_EMIT packagesLoaded({});
@@ -405,6 +549,12 @@ void PackageManager::refreshCache()
         m_pool->start([this, merge] { merge(queryFlatpak()); });
     if (m_cargoEnabled)
         m_pool->start([this, merge] { merge(queryCargo()); });
+    if (m_miseEnabled)
+        m_pool->start([this, merge] { merge(queryMise()); });
+    if (m_rustupEnabled)
+        m_pool->start([this, merge] { merge(queryRustup()); });
+    if (m_fvmEnabled)
+        m_pool->start([this, merge] { merge(queryFvm()); });
 }
 
 void PackageManager::refreshUpdates()
@@ -415,64 +565,51 @@ void PackageManager::refreshUpdates()
     // (paru/yay) is installed.
     const bool aurEnabled = m_pacmanEnabled && !aurHelper().isEmpty();
     const int count = (m_pacmanEnabled ? 1 : 0) + (aurEnabled ? 1 : 0)
-        + (m_flatpakEnabled ? 1 : 0) + (m_cargoEnabled ? 1 : 0);
+        + (m_flatpakEnabled ? 1 : 0) + (m_cargoEnabled ? 1 : 0)
+        + (m_miseEnabled ? 1 : 0) + (m_rustupEnabled ? 1 : 0);
     if (count == 0) {
         QMetaObject::invokeMethod(this, [this] {
-            Q_EMIT updatesReady({}, {}, {}, {});
+            Q_EMIT updatesReady({});
             Q_EMIT finished(true, i18n("No package backends enabled"));
         }, Qt::QueuedConnection);
         return;
     }
 
-    auto pacmanRes = std::make_shared<QSet<QString>>();
-    auto aurRes = std::make_shared<QSet<QString>>();
-    auto flatpakRes = std::make_shared<QSet<QString>>();
-    auto cargoRes = std::make_shared<QSet<QString>>();
+    auto results = std::make_shared<QHash<int, QSet<QString>>>();
     auto mutex = std::make_shared<QMutex>();
     auto remaining = std::make_shared<std::atomic<int>>(count);
-    auto merge = [this, pacmanRes, aurRes, flatpakRes, cargoRes, mutex,
-                  remaining](int which, QSet<QString> part) {
+    // The key is the PackageModel::Backend id; the pacman and AUR queries both
+    // report under Backend::Pacman, so their sets are united.
+    auto merge = [this, results, mutex, remaining](int which, QSet<QString> part) {
         {
             QMutexLocker locker(mutex.get());
-            switch (which) {
-            case 0:
-                *pacmanRes = part;
-                break;
-            case 1:
-                *aurRes = part;
-                break;
-            case 2:
-                *flatpakRes = part;
-                break;
-            default:
-                *cargoRes = part;
-                break;
-            }
+            (*results)[which].unite(part);
         }
         if (remaining->fetch_sub(1) != 1)
             return;
-        QSet<QString> pacman, aur, flatpak, cargo;
+        QHash<int, QSet<QString>> updates;
         {
             QMutexLocker locker(mutex.get());
-            pacman = *pacmanRes;
-            aur = *aurRes;
-            flatpak = *flatpakRes;
-            cargo = *cargoRes;
+            updates = *results;
         }
-        QMetaObject::invokeMethod(this, [this, pacman, aur, flatpak, cargo] {
-            Q_EMIT updatesReady(pacman, aur, flatpak, cargo);
+        QMetaObject::invokeMethod(this, [this, updates] {
+            Q_EMIT updatesReady(updates);
             Q_EMIT finished(true, i18n("Update check finished"));
         }, Qt::QueuedConnection);
     };
 
     if (m_pacmanEnabled)
-        m_pool->start([this, merge] { merge(0, queryPacmanUpdates()); });
+        m_pool->start([this, merge] { merge(int(Backend::Pacman), queryPacmanUpdates()); });
     if (aurEnabled)
-        m_pool->start([this, merge] { merge(1, aurUpdateNames()); });
+        m_pool->start([this, merge] { merge(int(Backend::Pacman), aurUpdateNames()); });
     if (m_flatpakEnabled)
-        m_pool->start([this, merge] { merge(2, flatpakUpdateNames()); });
+        m_pool->start([this, merge] { merge(int(Backend::Flatpak), flatpakUpdateNames()); });
     if (m_cargoEnabled)
-        m_pool->start([this, merge] { merge(3, cargoUpdateNames()); });
+        m_pool->start([this, merge] { merge(int(Backend::Cargo), cargoUpdateNames()); });
+    if (m_miseEnabled)
+        m_pool->start([this, merge] { merge(int(Backend::Mise), miseUpdateNames()); });
+    if (m_rustupEnabled)
+        m_pool->start([this, merge] { merge(int(Backend::Rustup), rustupUpdateNames()); });
 }
 
 void PackageManager::runOperation(const QString &label,
@@ -539,6 +676,36 @@ void PackageManager::runOperation(const QString &label,
                     }
                 }
             }
+
+            // Developer tools upgrade everything in one pass.
+            const bool hasMise = std::any_of(packages.cbegin(), packages.cend(),
+                                             [](const Package &p) {
+                                                 return p.backend == Backend::Mise;
+                                             });
+            if (hasMise && !m_cancelled) {
+                Q_EMIT progress(i18n("Upgrading mise tools (mise upgrade)…"));
+                QString output;
+                if (!runCommand({QStringLiteral("mise"), QStringLiteral("upgrade")},
+                                env, &output, 3600000)) {
+                    ok = false;
+                    lastError = i18n("mise upgrade: %1", output.right(400));
+                    Q_EMIT progress(i18n("Failed: %1", QStringLiteral("mise")));
+                }
+            }
+            const bool hasRustup = std::any_of(packages.cbegin(), packages.cend(),
+                                               [](const Package &p) {
+                                                   return p.backend == Backend::Rustup;
+                                               });
+            if (hasRustup && !m_cancelled) {
+                Q_EMIT progress(i18n("Upgrading rustup toolchains (rustup update)…"));
+                QString output;
+                if (!runCommand({QStringLiteral("rustup"), QStringLiteral("update")},
+                                env, &output, 3600000)) {
+                    ok = false;
+                    lastError = i18n("rustup update: %1", output.right(400));
+                    Q_EMIT progress(i18n("Failed: %1", QStringLiteral("rustup")));
+                }
+            }
         }
 
         for (const Package &pkg : packages) {
@@ -547,8 +714,10 @@ void PackageManager::runOperation(const QString &label,
                 lastError = i18n("Cancelled");
                 break;
             }
-            // The full system upgrade above already covered pacman updates.
-            if (op == Op::Update && pkg.backend == Backend::Pacman)
+            // Whole-pass upgrades above already covered pacman/AUR/mise/rustup
+            // updates; fvm versions have no update flow (install new ones).
+            if (op == Op::Update && pkg.backend != Backend::Flatpak
+                && pkg.backend != Backend::Cargo)
                 continue;
             // The command line needs the concrete package id (Flatpak app id),
             // not the display name.
@@ -589,6 +758,24 @@ void PackageManager::runOperation(const QString &label,
                 else
                     args << QStringLiteral("flatpak") << QStringLiteral("update")
                          << QStringLiteral("-y") << id;
+            } else if (pkg.backend == Backend::Mise) {
+                // The id is "tool@version".
+                if (op == Op::Remove)
+                    args << QStringLiteral("mise") << QStringLiteral("uninstall") << id;
+                else
+                    args << QStringLiteral("mise") << QStringLiteral("install") << id;
+            } else if (pkg.backend == Backend::Rustup) {
+                if (op == Op::Remove)
+                    args << QStringLiteral("rustup") << QStringLiteral("toolchain")
+                         << QStringLiteral("uninstall") << id;
+                else
+                    args << QStringLiteral("rustup") << QStringLiteral("toolchain")
+                         << QStringLiteral("install") << id;
+            } else if (pkg.backend == Backend::Fvm) {
+                if (op == Op::Remove)
+                    args << QStringLiteral("fvm") << QStringLiteral("remove") << id;
+                else
+                    args << QStringLiteral("fvm") << QStringLiteral("install") << id;
             } else {
                 if (op == Op::Remove)
                     args << QStringLiteral("cargo") << QStringLiteral("uninstall") << id;

@@ -180,6 +180,12 @@ QString PackageModel::backendName(Backend backend)
         return QStringLiteral("flatpak");
     case Backend::Cargo:
         return QStringLiteral("cargo");
+    case Backend::Mise:
+        return QStringLiteral("mise");
+    case Backend::Rustup:
+        return QStringLiteral("rustup");
+    case Backend::Fvm:
+        return QStringLiteral("fvm");
     }
     return {};
 }

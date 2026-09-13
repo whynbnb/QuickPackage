@@ -28,11 +28,18 @@ private:
     QCheckBox *m_pacmanCheck = nullptr;
     QCheckBox *m_flatpakCheck = nullptr;
     QCheckBox *m_cargoCheck = nullptr;
+    QCheckBox *m_miseCheck = nullptr;
+    QCheckBox *m_rustupCheck = nullptr;
+    QCheckBox *m_fvmCheck = nullptr;
     QComboBox *m_languageCombo = nullptr;
     QComboBox *m_themeCombo = nullptr;
     bool m_pacmanEnabled = true;
     bool m_flatpakEnabled = true;
     bool m_cargoEnabled = true;
+    // Developer tool backends are optional and disabled by default.
+    bool m_miseEnabled = false;
+    bool m_rustupEnabled = false;
+    bool m_fvmEnabled = false;
 };
 
 #endif
