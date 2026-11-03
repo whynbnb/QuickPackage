@@ -66,7 +66,6 @@ internal static class TranslationsZh
         ["Installing %1…"] = "正在安装 %1…",
         ["Installing selected packages…"] = "正在安装所选软件包…",
         ["Invalid proxy configuration."] = "代理配置无效。",
-        ["Language changes apply after restart."] = "语言更改将在重启后生效。",
         ["Language:"] = "语言:",
         ["Licenses:"] = "许可:",
         ["Light"] = "浅色",
@@ -144,5 +143,8 @@ internal static class TranslationsZh
         ["mise upgrade: %1"] = "mise upgrade: %1",
         ["pacman -Syu: %1"] = "pacman -Syu: %1",
         ["rustup update: %1"] = "rustup update: %1",
+        ["Build: %1"] = "构建时间: %1",
+        ["UI font: %1"] = "界面字体: %1",
+        ["Text rendering: %1"] = "文字渲染: %1",
     };
 }

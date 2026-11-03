@@ -10,6 +10,7 @@ public partial class ProxyWindow : Window
     public ProxyWindow()
     {
         InitializeComponent();
+        Core.FontStrategy.ApplyTextOptions(this);
         Title = Loc.T("Proxy Settings");
     }
 

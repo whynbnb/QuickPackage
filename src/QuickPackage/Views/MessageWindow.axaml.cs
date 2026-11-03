@@ -9,6 +9,7 @@ public partial class MessageWindow : Window
     public MessageWindow()
     {
         InitializeComponent();
+        Core.FontStrategy.ApplyTextOptions(this);
         KeyDown += (_, args) =>
         {
             if (args.Key == Key.Escape)

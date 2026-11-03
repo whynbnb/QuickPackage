@@ -10,6 +10,7 @@ public partial class UpdateWindow : Window
     public UpdateWindow()
     {
         InitializeComponent();
+        Core.FontStrategy.ApplyTextOptions(this);
     }
 
     protected override void OnOpened(EventArgs e)

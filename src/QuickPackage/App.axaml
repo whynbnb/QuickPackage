@@ -4,6 +4,10 @@
              RequestedThemeVariant="Default">
   <Application.Resources>
     <ResourceDictionary>
+      <!-- The Fluent theme points this at a bundled Latin-only font with a
+           platform-default fallback. Override it with the resolved UI family
+           (FontStrategy replaces this value at startup). -->
+      <FontFamily x:Key="ContentControlThemeFontFamily">sans-serif</FontFamily>
       <ResourceDictionary.ThemeDictionaries>
         <ResourceDictionary x:Key="Light">
           <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F4F5F7"/>

@@ -62,7 +62,6 @@ public partial class SettingsViewModel : ObservableObject
     public string EnableMiseText => Loc.T("Enable mise");
     public string EnableRustupText => Loc.T("Enable rustup");
     public string EnableFvmText => Loc.T("Enable fvm");
-    public string RestartNote => Loc.T("Language changes apply after restart.");
     public string OkText => Loc.T("OK");
     public string CancelText => Loc.T("Cancel");
 

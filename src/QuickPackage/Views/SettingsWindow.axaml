@@ -38,8 +38,6 @@
       </StackPanel>
     </GroupBox>
 
-    <TextBlock Text="{Binding RestartNote}" TextWrapping="Wrap" FontSize="12" Opacity="0.7"/>
-
     <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
       <Button Content="{Binding CancelText}" MinWidth="88" Click="OnCancel"/>
       <Button Content="{Binding OkText}" MinWidth="88" IsDefault="True" Click="OnOk"/>

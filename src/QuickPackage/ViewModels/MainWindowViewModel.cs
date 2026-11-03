@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using System.Globalization;
 using System.Net;
 using System.Net.Http;
 using System.Text.Json;
@@ -22,6 +23,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly Dictionary<ChipKind, ChipViewModel> _chipByKind = [];
     private readonly Dictionary<string, string> _descriptionCache = new(StringComparer.Ordinal);
     private readonly bool _checkUpdatesOnStart;
+    private string _languageSetting = "system";
 
     private Dictionary<Backend, Dictionary<string, string>> _updates = [];
     private bool _updatesLoaded;
@@ -44,6 +46,7 @@ public partial class MainWindowViewModel : ObservableObject
         _proxy.Load(_config);
 
         _checkUpdatesOnStart = _config.GetBool("General", "CheckUpdatesOnStart", true);
+        _languageSetting = _config.GetString("General", "Language", "system");
         LoadBackendSettings();
         ApplyBackendSettings();
 
@@ -705,6 +708,13 @@ public partial class MainWindowViewModel : ObservableObject
         if (!await _dialogs.ShowSettingsAsync(viewModel))
             return;
 
+        var newLanguage = viewModel.SelectedLanguage?.Value ?? "system";
+        if (!string.Equals(newLanguage, _languageSetting, StringComparison.Ordinal))
+        {
+            _languageSetting = newLanguage;
+            ApplyLanguage(newLanguage);
+        }
+
         var backendsChanged = viewModel.BackendsChanged;
         LoadBackendSettings();
         ApplyBackendSettings();
@@ -733,8 +743,16 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task AboutAsync()
     {
+        var assembly = typeof(MainWindowViewModel).Assembly;
+        var buildTime = assembly.Location.Length > 0 && File.Exists(assembly.Location)
+            ? File.GetLastWriteTime(assembly.Location).ToString("yyyy-MM-dd HH:mm")
+            : "—";
         var text = $"{Loc.T("QuickPackage")} 0.4.0\n"
             + Loc.T("A package manager for pacman, Flatpak, cargo and AUR")
+            + "\n\n"
+            + Loc.T("Build: %1", buildTime) + "\n"
+            + Loc.T("UI font: %1", FontStrategy.PrimaryFamilyName) + "\n"
+            + Loc.T("Text rendering: %1", FontStrategy.DescribeTextOptions())
             + "\n\n" + Loc.T("© 2026 QuickPackage contributors");
         await _dialogs.ShowInfoAsync(Loc.T("About"), text);
     }
@@ -841,6 +859,20 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     // --------------------------------------------------------------- settings
+
+    /// <summary>Switches the UI language immediately, without a restart.</summary>
+    private void ApplyLanguage(string setting)
+    {
+        Loc.SetLanguage(setting is "system" or "" ? Loc.DetectSystemLanguage() : setting);
+        var culture = CultureInfo.GetCultureInfo(Loc.IsChinese ? "zh-CN" : "en-US");
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+
+        L.NotifyAll();
+        UpdateCounters();
+        RebuildDetail(SelectedPackage);
+        StatusMessage = Loc.T("Ready");
+    }
 
     private void LoadBackendSettings()
     {

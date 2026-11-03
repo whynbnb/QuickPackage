@@ -1,3 +1,4 @@
+using System.Globalization;
 using Avalonia;
 using QuickPackage.Core;
 
@@ -13,12 +14,18 @@ internal static class Program
         var language = config.GetString("General", "Language", "system");
         Loc.SetLanguage(language == "system" ? Loc.DetectSystemLanguage() : language);
 
+        // Give text shaping an explicit language so CJK glyph variants are
+        // selected deterministically (Simplified Chinese uses the SC forms).
+        var culture = CultureInfo.GetCultureInfo(Loc.IsChinese ? "zh-CN" : "en-US");
+        CultureInfo.DefaultThreadCurrentCulture = culture;
+        CultureInfo.DefaultThreadCurrentUICulture = culture;
+
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
     }
 
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .WithInterFont()
+            .With(FontStrategy.CreateOptions())
             .LogToTrace();
 }

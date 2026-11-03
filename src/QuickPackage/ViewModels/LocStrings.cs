@@ -1,10 +1,18 @@
+using CommunityToolkit.Mvvm.ComponentModel;
 using QuickPackage.Core;
 
 namespace QuickPackage.ViewModels;
 
-/// <summary>Static UI captions bound from XAML (language is fixed per session).</summary>
-public sealed class LocStrings
+/// <summary>UI captions bound from XAML; refreshed on language changes.</summary>
+public sealed class LocStrings : ObservableObject
 {
+    /// <summary>Raises change notifications for every caption after Loc.SetLanguage.</summary>
+    public void NotifyAll()
+    {
+        foreach (var property in typeof(LocStrings).GetProperties())
+            OnPropertyChanged(property.Name);
+    }
+
     public string File => Loc.T("File");
     public string Packages => Loc.T("Packages");
     public string Settings => Loc.T("Settings");

@@ -1,4 +1,5 @@
 using Avalonia.Controls;
+using Avalonia.VisualTree;
 using QuickPackage.Core;
 using QuickPackage.ViewModels;
 
@@ -12,6 +13,7 @@ public partial class MainWindow : Window, IDialogService
     public MainWindow()
     {
         InitializeComponent();
+        Core.FontStrategy.ApplyTextOptions(this);
         _viewModel = new MainWindowViewModel(this);
         DataContext = _viewModel;
         Opened += OnOpened;

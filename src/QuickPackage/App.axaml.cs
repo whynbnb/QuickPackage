@@ -17,6 +17,10 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             ApplyTheme(Config.Load().GetString("General", "Theme", "system"));
+            // The Fluent theme points ContentControlThemeFontFamily at a bundled
+            // Latin-only font that lacks CJK glyphs and falls back to the
+            // platform default (a monospace face on some Linux setups).
+            Resources["ContentControlThemeFontFamily"] = FontStrategy.PrimaryFamily;
             desktop.MainWindow = new MainWindow();
         }
         base.OnFrameworkInitializationCompleted();

@@ -10,6 +10,7 @@ public partial class SettingsWindow : Window
     public SettingsWindow()
     {
         InitializeComponent();
+        Core.FontStrategy.ApplyTextOptions(this);
         Title = Loc.T("Settings");
     }
 

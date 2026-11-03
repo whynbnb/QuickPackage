@@ -100,4 +100,10 @@
     <Setter Property="CornerRadius" Value="6"/>
     <Setter Property="Padding" Value="12,6"/>
   </Style>
+  <Style Selector="Menu">
+    <Setter Property="FontFamily" Value="{DynamicResource ContentControlThemeFontFamily}"/>
+  </Style>
+  <Style Selector="MenuItem">
+    <Setter Property="FontFamily" Value="{DynamicResource ContentControlThemeFontFamily}"/>
+  </Style>
 </Styles>
