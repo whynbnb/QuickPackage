@@ -1,0 +1,14 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="QuickPackage.Views.MessageWindow"
+        Width="420" SizeToContent="Height"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <StackPanel Margin="20" Spacing="16">
+    <TextBlock x:Name="MessageText" TextWrapping="Wrap" FontSize="13"/>
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button x:Name="CancelButton" Content="Cancel" MinWidth="88"/>
+      <Button x:Name="OkButton" Content="OK" MinWidth="88" IsDefault="True"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

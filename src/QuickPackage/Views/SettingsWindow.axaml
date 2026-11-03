@@ -1,0 +1,48 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.SettingsWindow"
+        x:DataType="vm:SettingsViewModel"
+        Title="Settings"
+        Width="460" SizeToContent="Height"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <StackPanel Margin="20" Spacing="14">
+
+    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+      <TextBlock Text="{Binding LanguageLabel}" VerticalAlignment="Center"/>
+      <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}"
+                SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                HorizontalAlignment="Stretch"/>
+      <TextBlock Grid.Row="1" Text="{Binding ThemeLabel}" VerticalAlignment="Center"/>
+      <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}"
+                SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
+                HorizontalAlignment="Stretch"/>
+    </Grid>
+
+    <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
+
+    <GroupBox Header="{Binding BackendsGroup}">
+      <StackPanel Spacing="6">
+        <CheckBox Content="{Binding EnablePacmanText}" IsChecked="{Binding EnablePacman, Mode=TwoWay}"/>
+        <CheckBox Content="{Binding EnableFlatpakText}" IsChecked="{Binding EnableFlatpak, Mode=TwoWay}"/>
+        <CheckBox Content="{Binding EnableCargoText}" IsChecked="{Binding EnableCargo, Mode=TwoWay}"/>
+      </StackPanel>
+    </GroupBox>
+
+    <GroupBox Header="{Binding DevGroup}">
+      <StackPanel Spacing="6">
+        <CheckBox Content="{Binding EnableMiseText}" IsChecked="{Binding EnableMise, Mode=TwoWay}"/>
+        <CheckBox Content="{Binding EnableRustupText}" IsChecked="{Binding EnableRustup, Mode=TwoWay}"/>
+        <CheckBox Content="{Binding EnableFvmText}" IsChecked="{Binding EnableFvm, Mode=TwoWay}"/>
+      </StackPanel>
+    </GroupBox>
+
+    <TextBlock Text="{Binding RestartNote}" TextWrapping="Wrap" FontSize="12" Opacity="0.7"/>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="{Binding CancelText}" MinWidth="88" Click="OnCancel"/>
+      <Button Content="{Binding OkText}" MinWidth="88" IsDefault="True" Click="OnOk"/>
+    </StackPanel>
+  </StackPanel>
+</Window>

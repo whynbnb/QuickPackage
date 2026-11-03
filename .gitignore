@@ -1,7 +1,5 @@
-build/
-build-asan/
-*.o
+bin/
+obj/
+.vs/
 *.user
-.cache/
-compile_commands.json
-.clangd/
+*.suo

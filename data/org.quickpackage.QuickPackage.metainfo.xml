@@ -1,22 +1,22 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <component type="desktop-application">
   <id>org.quickpackage.QuickPackage</id>
-  <name>QuickPackage</name>
-  <summary>KDE-style package manager for pacman, Flatpak and cargo</summary>
-  <summary xml:lang="zh_CN">适配 KDE 风格的 pacman、Flatpak 与 cargo 软件包管理器</summary>
-  <developer_name>QuickPackage contributors</developer_name>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>GPL-3.0-or-later</project_license>
+  <name>QuickPackage</name>
+  <summary>Package manager for pacman, Flatpak, cargo and AUR</summary>
+  <description>
+    <p>QuickPackage manages system packages and developer toolchains from one window.</p>
+    <ul>
+      <li>pacman, AUR (paru/yay), Flatpak and cargo backends</li>
+      <li>Optional mise, rustup and fvm toolchains, separated from system packages</li>
+      <li>Update detection with available versions</li>
+      <li>HTTP/SOCKS5 proxy support, light/dark themes and English/Chinese UI</li>
+    </ul>
+  </description>
   <launchable type="desktop-id">org.quickpackage.QuickPackage.desktop</launchable>
-  <provides>
-    <binary>quickpackage</binary>
-  </provides>
-  <releases>
-    <release version="0.3.0" date="2026-09-12">
-      <description>
-        <p>Initial release with pacman, Flatpak and cargo support, and proxy configuration (HTTP/SOCKS5).</p>
-      </description>
-    </release>
-  </releases>
-  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>System</category>
+    <category>PackageManager</category>
+  </categories>
 </component>

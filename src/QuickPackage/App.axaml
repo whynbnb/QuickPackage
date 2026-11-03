@@ -1,0 +1,37 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="QuickPackage.App"
+             RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="AppBackgroundBrush" Color="#F4F5F7"/>
+          <SolidColorBrush x:Key="CardBackgroundBrush" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="CardBorderBrush" Color="#E1E4E9"/>
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#F1F4F8"/>
+          <SolidColorBrush x:Key="PaneBrush" Color="#FFFFFF"/>
+          <SolidColorBrush x:Key="SubtleTextBrush" Color="#6B7280"/>
+          <SolidColorBrush x:Key="AccentBrush" Color="#2D7FF9"/>
+          <SolidColorBrush x:Key="ChipCheckedBrush" Color="#2D7FF9"/>
+          <SolidColorBrush x:Key="ChipCheckedTextBrush" Color="#FFFFFF"/>
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="AppBackgroundBrush" Color="#1B1C1F"/>
+          <SolidColorBrush x:Key="CardBackgroundBrush" Color="#25272B"/>
+          <SolidColorBrush x:Key="CardBorderBrush" Color="#383B41"/>
+          <SolidColorBrush x:Key="CardHoverBrush" Color="#2E3136"/>
+          <SolidColorBrush x:Key="PaneBrush" Color="#222428"/>
+          <SolidColorBrush x:Key="SubtleTextBrush" Color="#9AA0A8"/>
+          <SolidColorBrush x:Key="AccentBrush" Color="#4C8DFF"/>
+          <SolidColorBrush x:Key="ChipCheckedBrush" Color="#3D7DDE"/>
+          <SolidColorBrush x:Key="ChipCheckedTextBrush" Color="#FFFFFF"/>
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+    </ResourceDictionary>
+  </Application.Resources>
+  <Application.Styles>
+    <FluentTheme />
+    <StyleInclude Source="avares://QuickPackage/Styles/AppStyles.axaml"/>
+  </Application.Styles>
+</Application>

@@ -1,0 +1,40 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.ProxyWindow"
+        x:DataType="vm:ProxyViewModel"
+        Title="Proxy Settings"
+        Width="440" SizeToContent="Height"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <StackPanel Margin="20" Spacing="14">
+
+    <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+      <TextBlock Text="{Binding ModeLabel}" VerticalAlignment="Center"/>
+      <ComboBox Grid.Column="1" ItemsSource="{Binding Modes}"
+                SelectedItem="{Binding SelectedMode, Mode=TwoWay}"
+                HorizontalAlignment="Stretch"/>
+
+      <TextBlock Grid.Row="1" Text="{Binding HostLabel}" VerticalAlignment="Center"/>
+      <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding Host, Mode=TwoWay}"
+               PlaceholderText="127.0.0.1" IsEnabled="{Binding IsProxyEnabled}"/>
+
+      <TextBlock Grid.Row="2" Text="{Binding PortLabel}" VerticalAlignment="Center"/>
+      <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding Port, Mode=TwoWay}"
+                     Minimum="1" Maximum="65535" Increment="1"
+                     IsEnabled="{Binding IsProxyEnabled}" FormatString="0"/>
+    </Grid>
+
+    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+      <Button Content="{Binding TestText}" Command="{Binding TestCommand}"
+              IsEnabled="{Binding IsNotTesting}"/>
+      <TextBlock Grid.Column="1" Text="{Binding TestResult}" TextWrapping="Wrap"
+                 VerticalAlignment="Center" FontSize="12" Opacity="0.8"/>
+    </Grid>
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="{Binding CancelText}" MinWidth="88" Click="OnCancel"/>
+      <Button Content="{Binding OkText}" MinWidth="88" IsDefault="True" Click="OnOk"/>
+    </StackPanel>
+  </StackPanel>
+</Window>
