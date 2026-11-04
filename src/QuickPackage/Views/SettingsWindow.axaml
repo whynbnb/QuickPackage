@@ -18,7 +18,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="14">
 
-        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
           <TextBlock Text="{Binding LanguageLabel}" VerticalAlignment="Center"/>
           <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}"
                     SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
@@ -27,6 +27,9 @@
           <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}"
                     SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
                     HorizontalAlignment="Stretch"/>
+          <TextBlock Grid.Row="2" Text="{Binding QueryTimeoutLabel}" VerticalAlignment="Center"/>
+          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding QueryTimeout, Mode=TwoWay}"
+                         Minimum="5" Maximum="600" Increment="5" FormatString="0"/>
         </Grid>
 
         <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>

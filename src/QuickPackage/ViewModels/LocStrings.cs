@@ -42,6 +42,7 @@ public sealed class LocStrings : ObservableObject
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
 
     public string ActivityLog => Loc.T("Activity log");
+    public string Stop => Loc.T("Stop");
     public string LogDetails => Loc.T("Details");
     public string CopyLog => Loc.T("Copy");
     public string ClearLog => Loc.T("Clear");

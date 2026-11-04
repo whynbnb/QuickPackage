@@ -550,11 +550,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (IsBusy)
             return;
         BeginBusy();
-        _operationCts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
         StatusMessage = Loc.T("Loading package lists…");
         try
         {
-            var packages = await _manager.LoadPackagesAsync(_operationCts.Token);
+            var packages = await _manager.LoadPackagesAsync(cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                StatusMessage = Loc.T("Cancelled");
+                return;
+            }
             _all.Clear();
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -590,11 +596,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (IsBusy)
             return;
         BeginBusy();
-        _operationCts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
         StatusMessage = Loc.T("Checking for updates…");
         try
         {
-            _updates = await _manager.CheckUpdatesAsync(_operationCts.Token);
+            _updates = await _manager.CheckUpdatesAsync(cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                StatusMessage = Loc.T("Cancelled");
+                return;
+            }
             _updatesLoaded = true;
             ApplyUpdatesToModels();
             ApplyFilter();
@@ -655,8 +667,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (packages.Count == 0 || IsBusy)
             return;
         BeginBusy();
-        _operationCts = new CancellationTokenSource();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
         var ok = true;
+        var cancelled = false;
         var message = string.Empty;
         void OnFinished(bool success, string text)
         {
@@ -673,12 +687,20 @@ public partial class MainWindowViewModel : ObservableObject
                 PackageOperation.Remove => Loc.T("Removing selected packages…"),
                 _ => Loc.T("Updating packages…"),
             };
-            await _manager.RunOperationAsync(operation, packages, _operationCts.Token);
-            if (!ok && message.Length > 0)
+            await _manager.RunOperationAsync(operation, packages, cts.Token);
+            if (cts.IsCancellationRequested)
+            {
+                cancelled = true;
+                StatusMessage = Loc.T("Cancelled");
+            }
+            else if (!ok && message.Length > 0)
+            {
                 StatusMessage = message;
+            }
         }
         catch (OperationCanceledException)
         {
+            cancelled = true;
             StatusMessage = Loc.T("Cancelled");
         }
         catch (Exception exception)
@@ -690,6 +712,9 @@ public partial class MainWindowViewModel : ObservableObject
             _manager.OperationFinished -= OnFinished;
             EndBusy();
         }
+
+        if (cancelled)
+            return;
 
         await RefreshAsync();
         await CheckUpdatesAsync();
@@ -814,7 +839,7 @@ public partial class MainWindowViewModel : ObservableObject
         AddLog(() =>
         {
             if (_commandsByActivity.Remove(activity.Id, out var item))
-                item.Finish(activity.Ok, activity.ExitCode);
+                item.Finish(activity.Ok, activity.ExitCode, activity.Reason);
             _activeCommands.Remove(activity.Id);
             UpdateCurrentCommand();
             _logDirty = true;
@@ -955,6 +980,13 @@ public partial class MainWindowViewModel : ObservableObject
             + Loc.T("Text rendering: %1", FontStrategy.DescribeTextOptions())
             + "\n\n" + Loc.T("© 2026 QuickPackage contributors");
         await _dialogs.ShowInfoAsync(Loc.T("About"), text);
+    }
+
+    [RelayCommand]
+    private void Stop()
+    {
+        if (IsBusy)
+            _operationCts?.Cancel();
     }
 
     [RelayCommand]
@@ -1099,5 +1131,6 @@ public partial class MainWindowViewModel : ObservableObject
         _manager.SetBackendEnabled(Backend.Rustup, _rustupEnabled);
         _manager.SetBackendEnabled(Backend.Fvm, _fvmEnabled);
         _manager.SetProxy(_proxy);
+        _manager.SetQueryTimeout(_config.GetInt("General", "CommandTimeout", 30));
     }
 }

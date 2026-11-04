@@ -49,6 +49,7 @@ public partial class SettingsViewModel : ObservableObject
         SelectedLanguage = Languages.FirstOrDefault(option => option.Value == _initialLanguage) ?? Languages[0];
         SelectedTheme = Themes.FirstOrDefault(option => option.Value == _initialTheme) ?? Themes[0];
         CheckUpdatesOnStart = config.GetBool("General", "CheckUpdatesOnStart", true);
+        QueryTimeout = Math.Clamp(config.GetInt("General", "CommandTimeout", 30), 5, 600);
 
         EnablePacman = _initialPacman = config.GetBool("General", "EnablePacman", true);
         EnableFlatpak = _initialFlatpak = config.GetBool("General", "EnableFlatpak", true);
@@ -78,6 +79,7 @@ public partial class SettingsViewModel : ObservableObject
     public string LanguageLabel => Loc.T("Language:");
     public string ThemeLabel => Loc.T("Theme:");
     public string StartupCheckText => Loc.T("Check for updates on startup");
+    public string QueryTimeoutLabel => Loc.T("Query timeout (s):");
     public string BackendsGroup => Loc.T("Package backends");
     public string EnablePacmanText => Loc.T("Enable pacman");
     public string EnableFlatpakText => Loc.T("Enable Flatpak");
@@ -110,6 +112,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _checkUpdatesOnStart;
+
+    [ObservableProperty]
+    private decimal _queryTimeout = 30;
 
     [ObservableProperty]
     private bool _enablePacman;
@@ -221,6 +226,7 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "Language", SelectedLanguage?.Value ?? "system");
         _config.Set("General", "Theme", SelectedTheme?.Value ?? "system");
         _config.Set("General", "CheckUpdatesOnStart", CheckUpdatesOnStart);
+        _config.Set("General", "CommandTimeout", Math.Clamp((int)QueryTimeout, 5, 600));
         _config.Set("General", "EnablePacman", EnablePacman);
         _config.Set("General", "EnableFlatpak", EnableFlatpak);
         _config.Set("General", "EnableCargo", EnableCargo);

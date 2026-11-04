@@ -14,6 +14,7 @@
     <KeyBinding Gesture="Ctrl+I" Command="{Binding InstallSelectedCommand}"/>
     <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}"/>
     <KeyBinding Gesture="Ctrl+Shift+OemComma" Command="{Binding SettingsCommand}"/>
+    <KeyBinding Gesture="Escape" Command="{Binding StopCommand}"/>
     <KeyBinding Gesture="Ctrl+Q" Command="{Binding QuitCommand}"/>
   </Window.KeyBindings>
 
@@ -262,8 +263,13 @@
       <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="8">
         <TextBlock Grid.Column="0" Text="{Binding FooterText}" Classes="subtle" FontSize="12"
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-        <ProgressBar Grid.Column="1" IsIndeterminate="True" Width="90" Height="4"
-                     IsVisible="{Binding IsBusy}" VerticalAlignment="Center"/>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
+                    VerticalAlignment="Center" IsVisible="{Binding IsBusy}">
+          <ProgressBar IsIndeterminate="True" Width="80" Height="4" VerticalAlignment="Center"/>
+          <Button Classes="ghost" Content="{Binding L.Stop}" FontSize="11"
+                  Padding="8,1" Foreground="#E5534B" Command="{Binding StopCommand}"
+                  ToolTip.Tip="{Binding L.Stop}"/>
+        </StackPanel>
         <TextBlock Grid.Column="2" Text="{Binding SelectionText}" Classes="subtle" FontSize="12"
                    VerticalAlignment="Center" IsVisible="{Binding HasSelection}"/>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2"

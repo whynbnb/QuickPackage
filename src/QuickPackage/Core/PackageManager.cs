@@ -22,6 +22,12 @@ public sealed partial class PackageManager
     private IReadOnlyDictionary<Backend, IReadOnlyDictionary<string, string>> _proxyEnvironments =
         new Dictionary<Backend, IReadOnlyDictionary<string, string>>();
 
+    // Read-only queries must not hang forever on a broken mirror/network.
+    private int _queryTimeoutMilliseconds = 30_000;
+
+    public void SetQueryTimeout(int seconds)
+        => _queryTimeoutMilliseconds = Math.Clamp(seconds, 5, 600) * 1000;
+
     /// <summary>Status / progress messages for the status bar.</summary>
     public event Action<string>? Message;
 
@@ -87,7 +93,7 @@ public sealed partial class PackageManager
         var result = new List<Package>();
         // LANG/LC_ALL=C keep the "key : value" layout stable for parsing.
         var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
-        var query = await CommandRunner.RunAsync("pacman", ["-Qi"], 60_000, environment, cancellationToken)
+        var query = await CommandRunner.RunAsync("pacman", ["-Qi"], _queryTimeoutMilliseconds, environment, cancellationToken)
             .ConfigureAwait(false);
 
         var package = new Package();
@@ -162,7 +168,7 @@ public sealed partial class PackageManager
 
         // pacman -Qi carries no repository on every system; map installed
         // packages to their repo via "pacman -Sl"; the rest is foreign (AUR).
-        var syncList = await CommandRunner.RunAsync("pacman", ["-Sl"], 60_000, environment, cancellationToken)
+        var syncList = await CommandRunner.RunAsync("pacman", ["-Sl"], _queryTimeoutMilliseconds, environment, cancellationToken)
             .ConfigureAwait(false);
         var repoByName = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var rawLine in syncList.Output.Split('\n'))
@@ -190,7 +196,7 @@ public sealed partial class PackageManager
         var run = await CommandRunner.RunAsync(
             "flatpak",
             ["list", "--app", "--columns=application,name,version,origin,description"],
-            60_000,
+            _queryTimeoutMilliseconds,
             ProxyEnvironment(Backend.Flatpak),
             cancellationToken).ConfigureAwait(false);
         if (!run.Ok && run.Output.Length == 0)
@@ -261,7 +267,9 @@ public sealed partial class PackageManager
     private async Task<List<Package>> QueryMiseAsync(CancellationToken cancellationToken)
     {
         var result = new List<Package>();
-        var run = await CommandRunner.RunAsync("mise", ["ls"], 120_000, ProxyEnvironment(Backend.Mise), cancellationToken)
+        var run = await CommandRunner.RunAsync(
+                "mise", ["ls"], _queryTimeoutMilliseconds,
+                ProxyEnvironment(Backend.Mise), cancellationToken)
             .ConfigureAwait(false);
         // Rows: "tool version config-path requested". A tool with several
         // installed versions gets one row per version.
@@ -289,7 +297,7 @@ public sealed partial class PackageManager
     {
         var result = new List<Package>();
         var run = await CommandRunner.RunAsync(
-            "rustup", ["toolchain", "list"], 120_000,
+            "rustup", ["toolchain", "list"], _queryTimeoutMilliseconds,
             ProxyEnvironment(Backend.Rustup), cancellationToken).ConfigureAwait(false);
         // Rows: "stable-x86_64-unknown-linux-gnu" or
         // "nightly-x86_64-unknown-linux-gnu (active, default)".
@@ -442,7 +450,7 @@ public sealed partial class PackageManager
 
     private async Task<Dictionary<string, string>> QueryPacmanUpdatesAsync(CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync("checkupdates", [], 60_000, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await CommandRunner.RunAsync("checkupdates", [], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -460,7 +468,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> AurUpdateNamesAsync(
         string helper, CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync(helper, ["-Qua"], 120_000, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -468,7 +476,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> MiseUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("mise", ["outdated"], 120_000, ProxyEnvironment(Backend.Mise), cancellationToken)
+        var run = await CommandRunner.RunAsync("mise", ["outdated"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
             .ConfigureAwait(false);
         // Rows: "tool requested current latest path" — latest is the 4th token.
         foreach (var rawLine in run.Output.Split('\n'))
@@ -484,7 +492,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> RustupUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("rustup", ["check"], 120_000, ProxyEnvironment(Backend.Rustup), cancellationToken)
+        var run = await CommandRunner.RunAsync("rustup", ["check"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
             .ConfigureAwait(false);
         // "<toolchain> - up to date: …" / "<toolchain> - Update available: 1.90.0 (x) -> 1.91.0 (y)"
         foreach (var rawLine in run.Output.Split('\n'))
@@ -517,7 +525,7 @@ public sealed partial class PackageManager
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
         var run = await CommandRunner.RunAsync(
             "flatpak", ["remote-ls", "--updates", "--app", "--columns=application,version"],
-            60_000, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
+            _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
         foreach (var rawLine in run.Output.Split('\n'))
         {
             var columns = rawLine.TrimEnd('\r').Split('\t');
@@ -533,7 +541,7 @@ public sealed partial class PackageManager
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
         var run = await CommandRunner.RunAsync(
-            "cargo", ["install-update", "--list"], 120_000,
+            "cargo", ["install-update", "--list"], _queryTimeoutMilliseconds,
             ProxyEnvironment(Backend.Cargo), cancellationToken).ConfigureAwait(false);
         // Rows: "name vInstalled vLatest Yes|No" — only Yes needs an update.
         foreach (var line in run.Output.Split('\n'))

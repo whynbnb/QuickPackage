@@ -29,6 +29,7 @@ public sealed partial class LogItemViewModel : ObservableObject
 
     private readonly StringBuilder _output = new();
     private int _exitCode;
+    private CommandEndReason _endReason = CommandEndReason.Completed;
     private bool _truncated;
     private bool _showDetails = true;
 
@@ -84,14 +85,27 @@ public sealed partial class LogItemViewModel : ObservableObject
 
     public bool IsRunning => State == LogItemState.Running;
 
-    public string StatusText => State switch
+    public string StatusText
     {
-        LogItemState.Running => Loc.T("Running…"),
-        LogItemState.Success => "\u2713",
-        LogItemState.Failure => "\u2717 " + Loc.T("exit %1", _exitCode),
-        LogItemState.QueryDone => "\u00B7 " + Loc.T("exit %1", _exitCode),
-        _ => string.Empty,
-    };
+        get
+        {
+            if (State == LogItemState.Running)
+                return Loc.T("Running…");
+            if (State == LogItemState.Success)
+                return "\u2713";
+            if (_endReason is CommandEndReason.TimedOut or CommandEndReason.Cancelled)
+            {
+                var reason = Loc.T(_endReason == CommandEndReason.TimedOut ? "Timed out" : "Cancelled");
+                return (State == LogItemState.Failure ? "\u2717 " : "\u00B7 ") + reason;
+            }
+            return State switch
+            {
+                LogItemState.Failure => "\u2717 " + Loc.T("exit %1", _exitCode),
+                LogItemState.QueryDone => "\u00B7 " + Loc.T("exit %1", _exitCode),
+                _ => string.Empty,
+            };
+        }
+    }
 
     public IBrush? HeaderBrush => State switch
     {
@@ -128,9 +142,10 @@ public sealed partial class LogItemViewModel : ObservableObject
         }
     }
 
-    public void Finish(bool ok, int exitCode)
+    public void Finish(bool ok, int exitCode, CommandEndReason reason)
     {
         _exitCode = exitCode;
+        _endReason = reason;
         State = Operation
             ? (ok ? LogItemState.Success : LogItemState.Failure)
             : LogItemState.QueryDone;

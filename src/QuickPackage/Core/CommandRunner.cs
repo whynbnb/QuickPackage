@@ -52,6 +52,7 @@ public static class CommandRunner
         var gate = new object();
         var exitCode = -1;
         var ok = false;
+        var endReason = CommandEndReason.Completed;
 
         Process? process = null;
         try
@@ -71,6 +72,9 @@ public static class CommandRunner
             }
             catch (OperationCanceledException)
             {
+                endReason = cancellationToken.IsCancellationRequested
+                    ? CommandEndReason.Cancelled
+                    : CommandEndReason.TimedOut;
                 TryKill(process);
                 await SafeAwaitAsync(stdoutTask, stderrTask);
                 return new Result(false, Snapshot());
@@ -90,7 +94,7 @@ public static class CommandRunner
         {
             process?.Dispose();
             CommandActivity.RaiseFinished(
-                new CommandFinished(activityId, commandLine, operation, ok, exitCode));
+                new CommandFinished(activityId, commandLine, operation, ok, exitCode, endReason));
         }
 
         // Read both streams concurrently: awaiting one stream fully would

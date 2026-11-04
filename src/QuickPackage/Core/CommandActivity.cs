@@ -6,9 +6,16 @@ public sealed record CommandStarted(long Id, string CommandLine, bool Operation)
 /// <summary>A batch of output lines (separated by '\n') from a running command.</summary>
 public sealed record CommandOutput(long Id, string Text);
 
+public enum CommandEndReason
+{
+    Completed,
+    TimedOut,
+    Cancelled,
+}
+
 /// <summary>An external command that has finished.</summary>
 public sealed record CommandFinished(
-    long Id, string CommandLine, bool Operation, bool Ok, int ExitCode);
+    long Id, string CommandLine, bool Operation, bool Ok, int ExitCode, CommandEndReason Reason);
 
 /// <summary>
 /// Broadcasts external command lifecycle events so the activity panel can show
