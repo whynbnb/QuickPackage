@@ -44,6 +44,7 @@ public partial class MainWindowViewModel : ObservableObject
     private CancellationTokenSource? _operationCts;
 
     private bool _pacmanEnabled = true;
+    private bool _aurEnabled = true;
     private bool _flatpakEnabled = true;
     private bool _cargoEnabled = true;
     private bool _miseEnabled;
@@ -179,7 +180,7 @@ public partial class MainWindowViewModel : ObservableObject
     public bool ShowBackendHint =>
         _isDevMode
             ? !HasDevBackends
-            : !_pacmanEnabled && !_flatpakEnabled && !_cargoEnabled;
+            : !_pacmanEnabled && !_aurEnabled && !_flatpakEnabled && !_cargoEnabled;
 
     public bool ShowEmpty => Packages.Count == 0 && !ShowBackendHint;
 
@@ -212,7 +213,8 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private bool HasSystemBackend => _pacmanEnabled || _flatpakEnabled || _cargoEnabled;
+    private bool HasSystemBackend =>
+        _pacmanEnabled || _aurEnabled || _flatpakEnabled || _cargoEnabled;
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
@@ -305,7 +307,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowBackendHint));
 
         SetChipVisible(ChipKind.Pacman, !_isDevMode && _pacmanEnabled);
-        SetChipVisible(ChipKind.Aur, !_isDevMode && _pacmanEnabled);
+        SetChipVisible(ChipKind.Aur, !_isDevMode && _aurEnabled);
         SetChipVisible(ChipKind.Flatpak, !_isDevMode && _flatpakEnabled);
         SetChipVisible(ChipKind.Cargo, !_isDevMode && _cargoEnabled);
         SetChipVisible(ChipKind.Mise, _isDevMode && _miseEnabled);
@@ -401,19 +403,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (_isDevMode ? !isDev : isDev)
             return false;
 
-        if (_selectedChip == ChipKind.Aur)
-        {
-            if (backend != Backend.Pacman || !model.Foreign)
-                return false;
-        }
-        else if (_selectedChip != ChipKind.All)
-        {
-            if ((Backend)_selectedChip != backend)
-                return false;
-            // The pacman chip only lists repo packages; AUR has its own chip.
-            if (backend == Backend.Pacman && model.Foreign)
-                return false;
-        }
+        if (_selectedChip != ChipKind.All && (Backend)_selectedChip != backend)
+            return false;
 
         if (ShowUpdatesOnly && model.Status != PackageStatus.NeedsUpdate)
             return false;
@@ -445,18 +436,14 @@ public partial class MainWindowViewModel : ObservableObject
             switch (model.Backend)
             {
                 case Backend.Pacman:
-                    if (model.Foreign)
-                    {
-                        ++aur;
-                        if (needsUpdate)
-                            ++aurUpdates;
-                    }
-                    else
-                    {
-                        ++pacman;
-                        if (needsUpdate)
-                            ++pacmanUpdates;
-                    }
+                    ++pacman;
+                    if (needsUpdate)
+                        ++pacmanUpdates;
+                    break;
+                case Backend.Aur:
+                    ++aur;
+                    if (needsUpdate)
+                        ++aurUpdates;
                     break;
                 case Backend.Flatpak:
                     ++flatpak;
@@ -1115,6 +1102,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void LoadBackendSettings()
     {
         _pacmanEnabled = _config.GetBool("General", "EnablePacman", true);
+        _aurEnabled = _config.GetBool("General", "EnableAur", true);
         _flatpakEnabled = _config.GetBool("General", "EnableFlatpak", true);
         _cargoEnabled = _config.GetBool("General", "EnableCargo", true);
         _miseEnabled = _config.GetBool("General", "EnableMise", false);
@@ -1125,6 +1113,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void ApplyBackendSettings()
     {
         _manager.SetBackendEnabled(Backend.Pacman, _pacmanEnabled);
+        _manager.SetBackendEnabled(Backend.Aur, _aurEnabled);
         _manager.SetBackendEnabled(Backend.Flatpak, _flatpakEnabled);
         _manager.SetBackendEnabled(Backend.Cargo, _cargoEnabled);
         _manager.SetBackendEnabled(Backend.Mise, _miseEnabled);

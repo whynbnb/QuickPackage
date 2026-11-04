@@ -5,7 +5,8 @@ C# 14 and Avalonia.
 
 ## Features
 
-- **System packages**: pacman (including AUR via `paru`/`yay`), Flatpak, cargo
+- **System packages**: pacman and AUR (via `paru`/`yay`) as separate
+  backends, plus Flatpak and cargo
 - **Developer tools** (optional, disabled by default): mise, rustup, fvm
 - A prominent **System packages / Developer packages** switch keeps the two
   worlds apart: each side has its own filter chips, counters and update flow

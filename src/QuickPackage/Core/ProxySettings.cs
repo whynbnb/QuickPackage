@@ -17,7 +17,7 @@ public sealed class ProxySettings
     /// <summary>Backends that should receive the proxy environment. Defaults to all.</summary>
     public HashSet<Backend> EnabledBackends { get; } =
     [
-        Backend.Pacman, Backend.Flatpak, Backend.Cargo,
+        Backend.Pacman, Backend.Aur, Backend.Flatpak, Backend.Cargo,
         Backend.Mise, Backend.Rustup, Backend.Fvm,
     ];
 

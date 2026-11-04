@@ -14,6 +14,7 @@ public partial class SettingsViewModel : ObservableObject
     private readonly string _initialLanguage;
     private readonly string _initialTheme;
     private readonly bool _initialPacman;
+    private readonly bool _initialAur;
     private readonly bool _initialFlatpak;
     private readonly bool _initialCargo;
     private readonly bool _initialMise;
@@ -52,6 +53,7 @@ public partial class SettingsViewModel : ObservableObject
         QueryTimeout = Math.Clamp(config.GetInt("General", "CommandTimeout", 30), 5, 600);
 
         EnablePacman = _initialPacman = config.GetBool("General", "EnablePacman", true);
+        EnableAur = _initialAur = config.GetBool("General", "EnableAur", true);
         EnableFlatpak = _initialFlatpak = config.GetBool("General", "EnableFlatpak", true);
         EnableCargo = _initialCargo = config.GetBool("General", "EnableCargo", true);
         EnableMise = _initialMise = config.GetBool("General", "EnableMise", false);
@@ -63,6 +65,7 @@ public partial class SettingsViewModel : ObservableObject
         ProxyHost = proxy.Host;
         ProxyPort = proxy.Port;
         ProxyPacman = proxy.IsEnabledFor(Backend.Pacman);
+        ProxyAur = proxy.IsEnabledFor(Backend.Aur);
         ProxyFlatpak = proxy.IsEnabledFor(Backend.Flatpak);
         ProxyCargo = proxy.IsEnabledFor(Backend.Cargo);
         ProxyMise = proxy.IsEnabledFor(Backend.Mise);
@@ -82,6 +85,7 @@ public partial class SettingsViewModel : ObservableObject
     public string QueryTimeoutLabel => Loc.T("Query timeout (s):");
     public string BackendsGroup => Loc.T("Package backends");
     public string EnablePacmanText => Loc.T("Enable pacman");
+    public string EnableAurText => Loc.T("Enable AUR");
     public string EnableFlatpakText => Loc.T("Enable Flatpak");
     public string EnableCargoText => Loc.T("Enable Cargo");
     public string DevGroup => Loc.T("Developer tools");
@@ -97,7 +101,8 @@ public partial class SettingsViewModel : ObservableObject
     public string ProxyPortLabel => Loc.T("Port:");
     public string ProxyTestText => Loc.T("Test");
     public string ProxyPerBackendLabel => Loc.T("Use the proxy for:");
-    public string ProxyPacmanText => "Pacman / AUR";
+    public string ProxyPacmanText => "Pacman";
+    public string ProxyAurText => "AUR";
     public string ProxyFlatpakText => Loc.T("Flatpak");
     public string ProxyCargoText => Loc.T("Cargo");
     public string ProxyMiseText => "mise";
@@ -118,6 +123,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _enablePacman;
+
+    [ObservableProperty]
+    private bool _enableAur;
 
     [ObservableProperty]
     private bool _enableFlatpak;
@@ -153,6 +161,9 @@ public partial class SettingsViewModel : ObservableObject
     private bool _proxyPacman;
 
     [ObservableProperty]
+    private bool _proxyAur;
+
+    [ObservableProperty]
     private bool _proxyFlatpak;
 
     [ObservableProperty]
@@ -173,6 +184,7 @@ public partial class SettingsViewModel : ObservableObject
 
     public bool BackendsChanged =>
         EnablePacman != _initialPacman
+        || EnableAur != _initialAur
         || EnableFlatpak != _initialFlatpak
         || EnableCargo != _initialCargo
         || EnableMise != _initialMise
@@ -228,6 +240,7 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "CheckUpdatesOnStart", CheckUpdatesOnStart);
         _config.Set("General", "CommandTimeout", Math.Clamp((int)QueryTimeout, 5, 600));
         _config.Set("General", "EnablePacman", EnablePacman);
+        _config.Set("General", "EnableAur", EnableAur);
         _config.Set("General", "EnableFlatpak", EnableFlatpak);
         _config.Set("General", "EnableCargo", EnableCargo);
         _config.Set("General", "EnableMise", EnableMise);
@@ -238,6 +251,7 @@ public partial class SettingsViewModel : ObservableObject
         _proxy.Host = ProxyHost.Trim();
         _proxy.Port = (int)ProxyPort;
         _proxy.SetEnabled(Backend.Pacman, ProxyPacman);
+        _proxy.SetEnabled(Backend.Aur, ProxyAur);
         _proxy.SetEnabled(Backend.Flatpak, ProxyFlatpak);
         _proxy.SetEnabled(Backend.Cargo, ProxyCargo);
         _proxy.SetEnabled(Backend.Mise, ProxyMise);

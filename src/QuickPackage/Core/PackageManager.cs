@@ -11,6 +11,7 @@ public sealed partial class PackageManager
     private readonly Dictionary<Backend, bool> _enabled = new()
     {
         [Backend.Pacman] = true,
+        [Backend.Aur] = true,
         [Backend.Flatpak] = true,
         [Backend.Cargo] = true,
         // Developer tool backends are optional and disabled by default.
@@ -71,7 +72,7 @@ public sealed partial class PackageManager
     public async Task<List<Package>> LoadPackagesAsync(CancellationToken cancellationToken)
     {
         var tasks = new List<Task<List<Package>>>();
-        if (_enabled[Backend.Pacman])
+        if (_enabled[Backend.Pacman] || _enabled[Backend.Aur])
             tasks.Add(QueryPacmanAsync(cancellationToken));
         if (_enabled[Backend.Flatpak])
             tasks.Add(QueryFlatpakAsync(cancellationToken));
@@ -177,17 +178,27 @@ public sealed partial class PackageManager
             if (match.Success)
                 repoByName.TryAdd(match.Groups[2].Value, match.Groups[1].Value);
         }
+        var enabled = new List<Package>(result.Count);
         foreach (var item in result)
         {
             if (repoByName.TryGetValue(item.Name, out var repo))
+            {
                 item.Origin = repo;
-            else if (string.IsNullOrEmpty(item.Origin) || item.Origin == "None")
+                item.Backend = Backend.Pacman;
+                item.Foreign = false;
+                if (_enabled[Backend.Pacman])
+                    enabled.Add(item);
+            }
+            else
             {
                 item.Origin = Loc.T("AUR / local");
+                item.Backend = Backend.Aur;
                 item.Foreign = true;
+                if (_enabled[Backend.Aur])
+                    enabled.Add(item);
             }
         }
-        return result;
+        return enabled;
     }
 
     private async Task<List<Package>> QueryFlatpakAsync(CancellationToken cancellationToken)
@@ -391,13 +402,12 @@ public sealed partial class PackageManager
         CancellationToken cancellationToken)
     {
         var helper = AurHelper();
-        var aurEnabled = _enabled[Backend.Pacman] && helper is not null;
         var tasks = new List<Task<(Backend Key, Dictionary<string, string> Updates)>>();
 
         if (_enabled[Backend.Pacman])
             tasks.Add(Wrap(Backend.Pacman, QueryPacmanUpdatesAsync(cancellationToken)));
-        if (aurEnabled)
-            tasks.Add(Wrap(Backend.Pacman, AurUpdateNamesAsync(helper!, cancellationToken)));
+        if (_enabled[Backend.Aur] && helper is not null)
+            tasks.Add(Wrap(Backend.Aur, AurUpdateNamesAsync(helper!, cancellationToken)));
         if (_enabled[Backend.Flatpak])
             tasks.Add(Wrap(Backend.Flatpak, FlatpakUpdateNamesAsync(cancellationToken)));
         if (_enabled[Backend.Cargo])
@@ -409,7 +419,6 @@ public sealed partial class PackageManager
 
         var results = await Task.WhenAll(tasks).ConfigureAwait(false);
         var updates = new Dictionary<Backend, Dictionary<string, string>>();
-        // pacman and AUR both report under Backend.Pacman; merge their entries.
         foreach (var (key, map) in results)
         {
             if (!updates.TryGetValue(key, out var target))
@@ -468,7 +477,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> AurUpdateNamesAsync(
         string helper, CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -573,7 +582,7 @@ public sealed partial class PackageManager
         // tool upgrade pass each.
         if (operation == PackageOperation.Update)
         {
-            if (packages.Any(p => p.Backend == Backend.Pacman && !p.Foreign))
+            if (packages.Any(p => p.Backend == Backend.Pacman))
             {
                 if (!cancellationToken.IsCancellationRequested)
                 {
@@ -591,7 +600,7 @@ public sealed partial class PackageManager
                 }
             }
 
-            if (packages.Any(p => p.Backend == Backend.Pacman && p.Foreign))
+            if (packages.Any(p => p.Backend == Backend.Aur))
             {
                 var helper = AurHelper();
                 if (helper is null)
@@ -607,7 +616,7 @@ public sealed partial class PackageManager
                     if (helper == "paru")
                         arguments.Add("--skipreview");
                     var run = await CommandRunner.RunAsync(helper, arguments, 3_600_000,
-                        ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true)
+                        ProxyEnvironment(Backend.Aur), cancellationToken, operation: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
                     {
@@ -692,7 +701,7 @@ public sealed partial class PackageManager
     {
         switch (package.Backend)
         {
-            case Backend.Pacman when package.Foreign:
+            case Backend.Aur:
                 if (operation == PackageOperation.Remove)
                     return ["sudo", "pacman", "-Rns", "--noconfirm", id];
                 var helper = AurHelper();

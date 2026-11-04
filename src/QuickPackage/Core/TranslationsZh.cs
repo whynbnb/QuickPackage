@@ -42,6 +42,7 @@ internal static class TranslationsZh
         ["Enable fvm"] = "启用 fvm",
         ["Enable mise"] = "启用 mise",
         ["Enable pacman"] = "启用 pacman",
+        ["Enable AUR"] = "启用 AUR",
         ["Enable rustup"] = "启用 rustup",
         ["FVM"] = "FVM",
         ["Failed"] = "失败",

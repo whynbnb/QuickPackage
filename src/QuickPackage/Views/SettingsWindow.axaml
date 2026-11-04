@@ -35,12 +35,14 @@
         <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
 
         <GroupBox Header="{Binding BackendsGroup}">
-          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
-            <CheckBox Grid.Column="0" Content="{Binding EnablePacmanText}"
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="8">
+            <CheckBox Grid.Row="0" Grid.Column="0" Content="{Binding EnablePacmanText}"
                       IsChecked="{Binding EnablePacman, Mode=TwoWay}"/>
-            <CheckBox Grid.Column="1" Content="{Binding EnableFlatpakText}"
+            <CheckBox Grid.Row="0" Grid.Column="1" Content="{Binding EnableAurText}"
+                      IsChecked="{Binding EnableAur, Mode=TwoWay}"/>
+            <CheckBox Grid.Row="1" Grid.Column="0" Content="{Binding EnableFlatpakText}"
                       IsChecked="{Binding EnableFlatpak, Mode=TwoWay}"/>
-            <CheckBox Grid.Column="2" Content="{Binding EnableCargoText}"
+            <CheckBox Grid.Row="1" Grid.Column="1" Content="{Binding EnableCargoText}"
                       IsChecked="{Binding EnableCargo, Mode=TwoWay}"/>
           </Grid>
         </GroupBox>
@@ -84,13 +86,15 @@
             <TextBlock Text="{Binding ProxyPerBackendLabel}" FontSize="12" Opacity="0.75"
                        Margin="0,4,0,0"/>
 
-            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" RowSpacing="6"
+            <Grid ColumnDefinitions="*,*,*,*" RowDefinitions="Auto,Auto" RowSpacing="6"
                   ColumnSpacing="8">
               <CheckBox Grid.Row="0" Grid.Column="0" Content="{Binding ProxyPacmanText}"
                         IsChecked="{Binding ProxyPacman, Mode=TwoWay}"/>
-              <CheckBox Grid.Row="0" Grid.Column="1" Content="{Binding ProxyFlatpakText}"
+              <CheckBox Grid.Row="0" Grid.Column="1" Content="{Binding ProxyAurText}"
+                        IsChecked="{Binding ProxyAur, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="0" Grid.Column="2" Content="{Binding ProxyFlatpakText}"
                         IsChecked="{Binding ProxyFlatpak, Mode=TwoWay}"/>
-              <CheckBox Grid.Row="0" Grid.Column="2" Content="{Binding ProxyCargoText}"
+              <CheckBox Grid.Row="0" Grid.Column="3" Content="{Binding ProxyCargoText}"
                         IsChecked="{Binding ProxyCargo, Mode=TwoWay}"/>
               <CheckBox Grid.Row="1" Grid.Column="0" Content="{Binding ProxyMiseText}"
                         IsChecked="{Binding ProxyMise, Mode=TwoWay}"/>

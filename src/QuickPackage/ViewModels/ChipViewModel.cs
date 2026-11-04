@@ -7,9 +7,9 @@ public enum ChipKind
 {
     // Pseudo filters above the backend ids, mirroring the former proxy ids.
     All = 100,
-    Aur = 101,
 
     Pacman = Backend.Pacman,
+    Aur = Backend.Aur,
     Flatpak = Backend.Flatpak,
     Cargo = Backend.Cargo,
     Mise = Backend.Mise,

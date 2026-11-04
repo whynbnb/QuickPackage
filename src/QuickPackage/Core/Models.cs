@@ -9,6 +9,7 @@ public enum Backend
     Mise = 3,
     Rustup = 4,
     Fvm = 5,
+    Aur = 6,
 }
 
 public enum PackageStatus
@@ -65,6 +66,7 @@ public static class BackendInfo
     public static string DisplayName(Backend backend) => backend switch
     {
         Backend.Pacman => Loc.T("Pacman"),
+        Backend.Aur => Loc.T("AUR"),
         Backend.Flatpak => Loc.T("Flatpak"),
         Backend.Cargo => Loc.T("Cargo"),
         Backend.Mise => Loc.T("Mise"),
