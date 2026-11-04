@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Globalization;
@@ -6,6 +7,7 @@ using System.Net.Http;
 using System.Text.Json;
 using Avalonia;
 using Avalonia.Controls.ApplicationLifetimes;
+using Avalonia.Input.Platform;
 using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -23,7 +25,14 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly Dictionary<ChipKind, ChipViewModel> _chipByKind = [];
     private readonly Dictionary<string, string> _descriptionCache = new(StringComparer.Ordinal);
     private readonly bool _checkUpdatesOnStart;
+    private readonly ConcurrentQueue<(LogEntryKind Kind, string Text)> _pendingLog = new();
+    private readonly Dictionary<long, string> _activeCommands = [];
     private string _languageSetting = "system";
+    private int _logFlushScheduled;
+
+    private const int MaxLogEntries = 500;
+    private const double MinLogPanelHeight = 90;
+    private const double MaxLogPanelHeight = 600;
 
     private Dictionary<Backend, Dictionary<string, string>> _updates = [];
     private bool _updatesLoaded;
@@ -50,8 +59,18 @@ public partial class MainWindowViewModel : ObservableObject
         LoadBackendSettings();
         ApplyBackendSettings();
 
+        _isLogExpanded = _config.GetBool("General", "LogPanelExpanded", true);
+        _logPanelHeight = Math.Clamp(
+            _config.GetInt("General", "LogPanelHeight", 170), (int)MinLogPanelHeight, (int)MaxLogPanelHeight);
+
         _manager.Message += message =>
+        {
+            AddLog(LogEntryKind.Info, message);
             Dispatcher.UIThread.Post(() => StatusMessage = message);
+        };
+        CommandActivity.Started += OnCommandStarted;
+        CommandActivity.Output += OnCommandOutput;
+        CommandActivity.Finished += OnCommandFinished;
 
         L = new LocStrings();
         StatusMessage = Loc.T("Ready");
@@ -67,6 +86,8 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<ChipViewModel> Chips { get; } = [];
 
     public ObservableCollection<DetailFieldViewModel> DetailFields { get; } = [];
+
+    public ObservableCollection<LogEntryViewModel> LogEntries { get; } = [];
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -116,7 +137,20 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _canUninstallSelectedPackage;
 
+    [ObservableProperty]
+    private bool _isLogExpanded;
+
+    [ObservableProperty]
+    private double _logPanelHeight = 170;
+
+    [ObservableProperty]
+    private string _currentCommand = string.Empty;
+
     public bool IsNotBusy => !IsBusy;
+
+    public bool HasCurrentCommand => CurrentCommand.Length > 0;
+
+    public string LogChevron => IsLogExpanded ? "▾" : "▸";
 
     public bool CanInstallRemove => HasSelection && !IsBusy;
 
@@ -173,6 +207,10 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanInstallRemove));
 
     partial void OnSelectedPackageChanged(PackageItemViewModel? value) => RebuildDetail(value);
+
+    partial void OnCurrentCommandChanged(string value) => OnPropertyChanged(nameof(HasCurrentCommand));
+
+    partial void OnIsLogExpandedChanged(bool value) => OnPropertyChanged(nameof(LogChevron));
 
     public async Task InitializeAsync()
     {
@@ -697,6 +735,112 @@ public partial class MainWindowViewModel : ObservableObject
             Loc.T("Update Package"), message, Loc.T("OK"), Loc.T("Cancel"));
         if (confirmed)
             await RunOperationAsync(PackageOperation.Update, [item.Model]);
+    }
+
+    // ------------------------------------------------------------------- log
+
+    private void OnCommandStarted(CommandStarted activity)
+    {
+        AddLog(LogEntryKind.Command, "$ " + activity.CommandLine);
+        Dispatcher.UIThread.Post(() =>
+        {
+            _activeCommands[activity.Id] = activity.CommandLine;
+            UpdateCurrentCommand();
+        });
+    }
+
+    private void OnCommandOutput(CommandOutput activity) => AddLog(LogEntryKind.Output, activity.Line);
+
+    private void OnCommandFinished(CommandFinished activity)
+    {
+        if (activity.Operation)
+        {
+            // Mutating commands (install/remove/update) carry real output, so
+            // their exit status deserves a clear success/failure line.
+            AddLog(
+                activity.Ok ? LogEntryKind.Success : LogEntryKind.Error,
+                activity.Ok
+                    ? "\u2713 " + activity.CommandLine
+                    : $"\u2717 {activity.CommandLine} ({Loc.T("exit %1", activity.ExitCode)})");
+        }
+        else
+        {
+            // Read-only queries (e.g. checkupdates exits 2 when nothing is
+            // pending) are informational, never failures.
+            AddLog(
+                LogEntryKind.Info,
+                $"\u00B7 {activity.CommandLine} ({Loc.T("exit %1", activity.ExitCode)})");
+        }
+        Dispatcher.UIThread.Post(() =>
+        {
+            _activeCommands.Remove(activity.Id);
+            UpdateCurrentCommand();
+        });
+    }
+
+    private void UpdateCurrentCommand()
+    {
+        CurrentCommand = _activeCommands.Count == 0
+            ? string.Empty
+            : _activeCommands.OrderByDescending(pair => pair.Key).First().Value;
+    }
+
+    /// <summary>Queues a log line; the UI drains the queue on the dispatching thread.</summary>
+    private void AddLog(LogEntryKind kind, string text)
+    {
+        _pendingLog.Enqueue((kind, text));
+        if (Interlocked.Exchange(ref _logFlushScheduled, 1) == 0)
+            Dispatcher.UIThread.Post(FlushLog, DispatcherPriority.Background);
+    }
+
+    private void FlushLog()
+    {
+        Interlocked.Exchange(ref _logFlushScheduled, 0);
+        while (_pendingLog.TryDequeue(out var entry))
+            LogEntries.Add(new LogEntryViewModel(entry.Kind, entry.Text));
+        while (LogEntries.Count > MaxLogEntries)
+            LogEntries.RemoveAt(0);
+    }
+
+    [RelayCommand]
+    private void ToggleLog()
+    {
+        IsLogExpanded = !IsLogExpanded;
+        SaveLogPanelState();
+    }
+
+    [RelayCommand]
+    private void ClearLog()
+    {
+        LogEntries.Clear();
+        while (_pendingLog.TryDequeue(out _))
+        {
+            // Drop anything that has not been painted yet.
+        }
+    }
+
+    [RelayCommand]
+    private async Task CopyLogAsync()
+    {
+        var text = string.Join(Environment.NewLine, LogEntries.Select(entry => entry.Text));
+        var window = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (window?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(text);
+        StatusMessage = Loc.T("Log copied to clipboard");
+    }
+
+    /// <summary>Drags the log panel's top edge; positive delta grows towards the top.</summary>
+    public void ResizeLogPanel(double delta, double availableHeight)
+    {
+        var maximum = Math.Clamp(availableHeight - 320, MinLogPanelHeight, MaxLogPanelHeight);
+        LogPanelHeight = Math.Clamp(LogPanelHeight + delta, MinLogPanelHeight, maximum);
+    }
+
+    public void SaveLogPanelState()
+    {
+        _config.Set("General", "LogPanelHeight", (int)Math.Round(LogPanelHeight));
+        _config.Set("General", "LogPanelExpanded", IsLogExpanded);
+        _config.Save();
     }
 
     // ---------------------------------------------------------------- dialogs

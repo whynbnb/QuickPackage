@@ -552,7 +552,8 @@ public sealed partial class PackageManager
                 {
                     Report(Loc.T("Upgrading system (pacman -Syu)…"));
                     var run = await CommandRunner.RunAsync(
-                        "sudo", ["pacman", "-Syu", "--noconfirm"], 3_600_000, null, cancellationToken)
+                        "sudo", ["pacman", "-Syu", "--noconfirm"], 3_600_000, null,
+                        cancellationToken, logOutput: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
                     {
@@ -578,7 +579,8 @@ public sealed partial class PackageManager
                     var arguments = new List<string> { "-Sua", "--noconfirm" };
                     if (helper == "paru")
                         arguments.Add("--skipreview");
-                    var run = await CommandRunner.RunAsync(helper, arguments, 3_600_000, null, cancellationToken)
+                    var run = await CommandRunner.RunAsync(helper, arguments, 3_600_000, null, cancellationToken,
+                        logOutput: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
                     {
@@ -593,7 +595,7 @@ public sealed partial class PackageManager
             {
                 Report(Loc.T("Upgrading mise tools (mise upgrade)…"));
                 var run = await CommandRunner.RunAsync(
-                    "mise", ["upgrade"], 3_600_000, null, cancellationToken).ConfigureAwait(false);
+                    "mise", ["upgrade"], 3_600_000, null, cancellationToken, logOutput: true).ConfigureAwait(false);
                 if (!run.Ok)
                 {
                     state.Ok = false;
@@ -606,7 +608,7 @@ public sealed partial class PackageManager
             {
                 Report(Loc.T("Upgrading rustup toolchains (rustup update)…"));
                 var run = await CommandRunner.RunAsync(
-                    "rustup", ["update"], 3_600_000, null, cancellationToken).ConfigureAwait(false);
+                    "rustup", ["update"], 3_600_000, null, cancellationToken, logOutput: true).ConfigureAwait(false);
                 if (!run.Ok)
                 {
                     state.Ok = false;
@@ -642,7 +644,7 @@ public sealed partial class PackageManager
                 _ => Loc.T("Updating %1…", package.Name),
             });
             var run = await CommandRunner.RunAsync(arguments[0], arguments.Skip(1), 1_800_000, null,
-                cancellationToken).ConfigureAwait(false);
+                cancellationToken, logOutput: true).ConfigureAwait(false);
             if (!run.Ok)
             {
                 state.Ok = false;

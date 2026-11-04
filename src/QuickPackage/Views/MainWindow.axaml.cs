@@ -1,4 +1,8 @@
+using System.Collections.Specialized;
+using System.ComponentModel;
 using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Threading;
 using Avalonia.VisualTree;
 using QuickPackage.Core;
 using QuickPackage.ViewModels;
@@ -16,9 +20,32 @@ public partial class MainWindow : Window, IDialogService
         Core.FontStrategy.ApplyTextOptions(this);
         _viewModel = new MainWindowViewModel(this);
         DataContext = _viewModel;
+        _viewModel.LogEntries.CollectionChanged += OnLogEntriesChanged;
+        _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
         Closing += OnClosing;
     }
+
+    private void OnLogEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollLogToEnd();
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(MainWindowViewModel.IsLogExpanded))
+            ScrollLogToEnd();
+    }
+
+    private void ScrollLogToEnd()
+    {
+        if (!_viewModel.IsLogExpanded)
+            return;
+        Dispatcher.UIThread.Post(() => LogScroll.ScrollToEnd(), DispatcherPriority.Background);
+    }
+
+    private void OnLogResizeDrag(object? sender, VectorEventArgs e)
+        => _viewModel.ResizeLogPanel(-e.Vector.Y, Bounds.Height);
+
+    private void OnLogResizeCompleted(object? sender, VectorEventArgs e)
+        => _viewModel.SaveLogPanelState();
 
     private async void OnOpened(object? sender, EventArgs e)
     {

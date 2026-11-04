@@ -106,4 +106,35 @@
   <Style Selector="MenuItem">
     <Setter Property="FontFamily" Value="{DynamicResource ContentControlThemeFontFamily}"/>
   </Style>
+
+  <!-- Flat, chrome-less buttons used by the activity log header. -->
+  <Style Selector="Button.ghost">
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="BorderThickness" Value="0"/>
+    <Setter Property="CornerRadius" Value="5"/>
+    <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}"/>
+  </Style>
+  <Style Selector="Button.ghost:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+  </Style>
+
+  <!-- Drag handle on the activity log's top edge. -->
+  <Style Selector="Thumb.logresize">
+    <Setter Property="Height" Value="7"/>
+    <Setter Property="Background" Value="Transparent"/>
+    <Setter Property="Cursor" Value="SizeNorthSouth"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <Border Background="Transparent">
+          <Border Width="42" Height="3" CornerRadius="1.5"
+                  Background="{DynamicResource CardBorderBrush}"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+
+  <Style Selector="TextBlock.mono">
+    <Setter Property="FontFamily" Value="DejaVu Sans Mono, Noto Sans Mono CJK SC, monospace"/>
+  </Style>
 </Styles>

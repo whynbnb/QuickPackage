@@ -11,6 +11,8 @@ C# 14 and Avalonia.
   worlds apart: each side has its own filter chips, counters and update flow
 - Update detection per backend with available versions
 - Install / remove / update selected packages, with a master-detail pane
+- A collapsible, resizable **activity log** at the bottom shows the commands
+  being run and their live output (copy/clear included)
 - Proxy support (HTTP or SOCKS5) for every backend command
 - Light / dark / system theme and English / Simplified Chinese UI
 - `quickpackagerc` settings in the established format, so existing
@@ -52,6 +54,6 @@ Install the desktop entry from `data/` next to the binary (or into
 Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 `~/.config/quickpackagerc`):
 
-- `[General]` — language, theme, startup update check and one `Enable*` key
-  per backend
+- `[General]` — language, theme, startup update check, the activity log's
+  expanded state/height and one `Enable*` key per backend
 - `[Proxy]` — mode, host and port

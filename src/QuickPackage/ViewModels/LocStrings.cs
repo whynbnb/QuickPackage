@@ -41,4 +41,8 @@ public sealed class LocStrings : ObservableObject
     public string BackendsDisabledHint => Loc.T("All package backends are disabled. Enable at least one in Settings.");
     public string NoMatchingPackages => Loc.T("No matching packages");
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
+
+    public string ActivityLog => Loc.T("Activity log");
+    public string CopyLog => Loc.T("Copy");
+    public string ClearLog => Loc.T("Clear");
 }

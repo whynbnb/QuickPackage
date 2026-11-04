@@ -17,7 +17,7 @@
     <KeyBinding Gesture="Ctrl+Q" Command="{Binding QuitCommand}"/>
   </Window.KeyBindings>
 
-  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto">
+  <Grid RowDefinitions="Auto,Auto,Auto,*,Auto,Auto,Auto,Auto">
 
     <!-- Menu -->
     <Menu Grid.Row="0" Background="Transparent">
@@ -218,8 +218,57 @@
                  VerticalAlignment="Center" FontSize="12"/>
     </Grid>
 
-    <!-- Status bar -->
+    <!-- Activity log header (always visible) -->
     <Border Grid.Row="5" Background="{DynamicResource PaneBrush}" BorderThickness="0,1,0,0"
+            BorderBrush="{DynamicResource CardBorderBrush}" Padding="12,3">
+      <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="8">
+        <Button Grid.Column="0" Classes="ghost" Padding="4,2"
+                Command="{Binding ToggleLogCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="6">
+            <TextBlock Text="{Binding LogChevron}" FontSize="10" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding L.ActivityLog}" FontSize="12" VerticalAlignment="Center"/>
+          </StackPanel>
+        </Button>
+        <TextBlock Grid.Column="1" Text="{Binding CurrentCommand}" Classes="mono" FontSize="11"
+                   Opacity="0.75" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                   IsVisible="{Binding HasCurrentCommand}"/>
+        <Button Grid.Column="2" Classes="ghost" Content="{Binding L.CopyLog}" FontSize="11"
+                Padding="8,2" Command="{Binding CopyLogCommand}"/>
+        <Button Grid.Column="3" Classes="ghost" Content="{Binding L.ClearLog}" FontSize="11"
+                Padding="8,2" Command="{Binding ClearLogCommand}"/>
+      </Grid>
+    </Border>
+
+    <!-- Activity log body: collapsible and resizable with the handle above it -->
+    <Grid Grid.Row="6" RowDefinitions="Auto,*" IsVisible="{Binding IsLogExpanded}"
+          Height="{Binding LogPanelHeight}" ClipToBounds="True">
+      <Thumb Grid.Row="0" Classes="logresize"
+             DragDelta="OnLogResizeDrag" DragCompleted="OnLogResizeCompleted"/>
+      <Border Grid.Row="1" Classes="pane" Margin="12,0,12,6">
+        <ScrollViewer x:Name="LogScroll" HorizontalScrollBarVisibility="Auto"
+                      VerticalScrollBarVisibility="Auto" Padding="10,6">
+          <ItemsControl ItemsSource="{Binding LogEntries}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate x:DataType="vm:LogEntryViewModel">
+                <Grid>
+                  <!-- Plain output inherits the theme foreground (a null brush would draw nothing). -->
+                  <TextBlock Text="{Binding Text}" Classes="mono" FontSize="11"
+                             FontWeight="{Binding FontWeight}" TextWrapping="NoWrap"
+                             IsVisible="{Binding IsPlain}"/>
+                  <TextBlock Text="{Binding Text}" Classes="mono" FontSize="11"
+                             Foreground="{Binding Foreground}"
+                             FontWeight="{Binding FontWeight}" TextWrapping="NoWrap"
+                             IsVisible="{Binding !IsPlain}"/>
+                </Grid>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Border>
+    </Grid>
+
+    <!-- Status bar -->
+    <Border Grid.Row="7" Background="{DynamicResource PaneBrush}" BorderThickness="0,1,0,0"
             BorderBrush="{DynamicResource CardBorderBrush}" Padding="12,6">
       <Grid ColumnDefinitions="*,Auto">
         <TextBlock Text="{Binding StatusMessage}" Classes="subtle" FontSize="12"
