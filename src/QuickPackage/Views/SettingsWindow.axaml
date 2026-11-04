@@ -4,43 +4,102 @@
         x:Class="QuickPackage.Views.SettingsWindow"
         x:DataType="vm:SettingsViewModel"
         Title="Settings"
-        Width="460" SizeToContent="Height"
+        Width="540" MaxHeight="780" SizeToContent="Height"
         CanResize="False" WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
-  <StackPanel Margin="20" Spacing="14">
+  <DockPanel Margin="20" LastChildFill="True">
 
-    <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" RowSpacing="10">
-      <TextBlock Text="{Binding LanguageLabel}" VerticalAlignment="Center"/>
-      <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}"
-                SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
-                HorizontalAlignment="Stretch"/>
-      <TextBlock Grid.Row="1" Text="{Binding ThemeLabel}" VerticalAlignment="Center"/>
-      <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}"
-                SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
-                HorizontalAlignment="Stretch"/>
-    </Grid>
-
-    <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
-
-    <GroupBox Header="{Binding BackendsGroup}">
-      <StackPanel Spacing="6">
-        <CheckBox Content="{Binding EnablePacmanText}" IsChecked="{Binding EnablePacman, Mode=TwoWay}"/>
-        <CheckBox Content="{Binding EnableFlatpakText}" IsChecked="{Binding EnableFlatpak, Mode=TwoWay}"/>
-        <CheckBox Content="{Binding EnableCargoText}" IsChecked="{Binding EnableCargo, Mode=TwoWay}"/>
-      </StackPanel>
-    </GroupBox>
-
-    <GroupBox Header="{Binding DevGroup}">
-      <StackPanel Spacing="6">
-        <CheckBox Content="{Binding EnableMiseText}" IsChecked="{Binding EnableMise, Mode=TwoWay}"/>
-        <CheckBox Content="{Binding EnableRustupText}" IsChecked="{Binding EnableRustup, Mode=TwoWay}"/>
-        <CheckBox Content="{Binding EnableFvmText}" IsChecked="{Binding EnableFvm, Mode=TwoWay}"/>
-      </StackPanel>
-    </GroupBox>
-
-    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal"
+                HorizontalAlignment="Right" Spacing="8" Margin="0,14,0,0">
       <Button Content="{Binding CancelText}" MinWidth="88" Click="OnCancel"/>
       <Button Content="{Binding OkText}" MinWidth="88" IsDefault="True" Click="OnOk"/>
     </StackPanel>
-  </StackPanel>
+
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="14">
+
+        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" RowSpacing="10">
+          <TextBlock Text="{Binding LanguageLabel}" VerticalAlignment="Center"/>
+          <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}"
+                    SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch"/>
+          <TextBlock Grid.Row="1" Text="{Binding ThemeLabel}" VerticalAlignment="Center"/>
+          <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}"
+                    SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
+                    HorizontalAlignment="Stretch"/>
+        </Grid>
+
+        <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
+
+        <GroupBox Header="{Binding BackendsGroup}">
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <CheckBox Grid.Column="0" Content="{Binding EnablePacmanText}"
+                      IsChecked="{Binding EnablePacman, Mode=TwoWay}"/>
+            <CheckBox Grid.Column="1" Content="{Binding EnableFlatpakText}"
+                      IsChecked="{Binding EnableFlatpak, Mode=TwoWay}"/>
+            <CheckBox Grid.Column="2" Content="{Binding EnableCargoText}"
+                      IsChecked="{Binding EnableCargo, Mode=TwoWay}"/>
+          </Grid>
+        </GroupBox>
+
+        <GroupBox Header="{Binding DevGroup}">
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="8">
+            <CheckBox Grid.Column="0" Content="{Binding EnableMiseText}"
+                      IsChecked="{Binding EnableMise, Mode=TwoWay}"/>
+            <CheckBox Grid.Column="1" Content="{Binding EnableRustupText}"
+                      IsChecked="{Binding EnableRustup, Mode=TwoWay}"/>
+            <CheckBox Grid.Column="2" Content="{Binding EnableFvmText}"
+                      IsChecked="{Binding EnableFvm, Mode=TwoWay}"/>
+          </Grid>
+        </GroupBox>
+
+        <GroupBox Header="{Binding ProxyGroup}">
+          <StackPanel Spacing="10">
+            <Grid ColumnDefinitions="90,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="8">
+              <TextBlock Text="{Binding ProxyModeLabel}" VerticalAlignment="Center"/>
+              <ComboBox Grid.Column="1" ItemsSource="{Binding ProxyModes}"
+                        SelectedItem="{Binding SelectedProxyMode, Mode=TwoWay}"
+                        HorizontalAlignment="Stretch"/>
+
+              <TextBlock Grid.Row="1" Text="{Binding ProxyHostLabel}" VerticalAlignment="Center"/>
+              <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding ProxyHost, Mode=TwoWay}"
+                       PlaceholderText="127.0.0.1" IsEnabled="{Binding IsProxyEnabled}"/>
+
+              <TextBlock Grid.Row="2" Text="{Binding ProxyPortLabel}" VerticalAlignment="Center"/>
+              <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding ProxyPort, Mode=TwoWay}"
+                             Minimum="1" Maximum="65535" Increment="1"
+                             IsEnabled="{Binding IsProxyEnabled}" FormatString="0"/>
+            </Grid>
+
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+              <Button Content="{Binding ProxyTestText}" Command="{Binding TestProxyCommand}"
+                      IsEnabled="{Binding IsProxyNotTesting}"/>
+              <TextBlock Grid.Column="1" Text="{Binding ProxyTestResult}" TextWrapping="Wrap"
+                         VerticalAlignment="Center" FontSize="12" Opacity="0.8"/>
+            </Grid>
+
+            <TextBlock Text="{Binding ProxyPerBackendLabel}" FontSize="12" Opacity="0.75"
+                       Margin="0,4,0,0"/>
+
+            <Grid ColumnDefinitions="*,*,*" RowDefinitions="Auto,Auto" RowSpacing="6"
+                  ColumnSpacing="8">
+              <CheckBox Grid.Row="0" Grid.Column="0" Content="{Binding ProxyPacmanText}"
+                        IsChecked="{Binding ProxyPacman, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="0" Grid.Column="1" Content="{Binding ProxyFlatpakText}"
+                        IsChecked="{Binding ProxyFlatpak, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="0" Grid.Column="2" Content="{Binding ProxyCargoText}"
+                        IsChecked="{Binding ProxyCargo, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="1" Grid.Column="0" Content="{Binding ProxyMiseText}"
+                        IsChecked="{Binding ProxyMise, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="1" Grid.Column="1" Content="{Binding ProxyRustupText}"
+                        IsChecked="{Binding ProxyRustup, Mode=TwoWay}"/>
+              <CheckBox Grid.Row="1" Grid.Column="2" Content="{Binding ProxyFvmText}"
+                        IsChecked="{Binding ProxyFvm, Mode=TwoWay}"/>
+            </Grid>
+          </StackPanel>
+        </GroupBox>
+
+      </StackPanel>
+    </ScrollViewer>
+  </DockPanel>
 </Window>

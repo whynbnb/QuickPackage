@@ -89,6 +89,8 @@ internal static class TranslationsZh
         ["Port:"] = "端口:",
         ["Preferences…"] = "首选项…",
         ["Proxy Settings"] = "代理设置",
+        ["Proxy"] = "代理",
+        ["Use the proxy for:"] = "为以下后端使用代理:",
         ["Proxy disabled"] = "代理已禁用",
         ["Proxy: %1"] = "代理:%1",
         ["QuickPackage"] = "QuickPackage",

@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
+using System.Net;
+using System.Net.Http;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using QuickPackage.Core;
 
 namespace QuickPackage.ViewModels;
@@ -7,6 +10,7 @@ namespace QuickPackage.ViewModels;
 public partial class SettingsViewModel : ObservableObject
 {
     private readonly Config _config;
+    private readonly ProxySettings _proxy;
     private readonly string _initialLanguage;
     private readonly string _initialTheme;
     private readonly bool _initialPacman;
@@ -16,9 +20,10 @@ public partial class SettingsViewModel : ObservableObject
     private readonly bool _initialRustup;
     private readonly bool _initialFvm;
 
-    public SettingsViewModel(Config config)
+    public SettingsViewModel(Config config, ProxySettings proxy)
     {
         _config = config;
+        _proxy = proxy;
 
         Languages =
         [
@@ -31,6 +36,12 @@ public partial class SettingsViewModel : ObservableObject
             new OptionItem { Value = "system", Label = Loc.T("System") },
             new OptionItem { Value = "light", Label = Loc.T("Light") },
             new OptionItem { Value = "dark", Label = Loc.T("Dark") },
+        ];
+        ProxyModes =
+        [
+            new OptionItem { Value = "0", Label = Loc.T("No proxy") },
+            new OptionItem { Value = "1", Label = "HTTP" },
+            new OptionItem { Value = "2", Label = "SOCKS5" },
         ];
 
         _initialLanguage = config.GetString("General", "Language", "system");
@@ -45,11 +56,24 @@ public partial class SettingsViewModel : ObservableObject
         EnableMise = _initialMise = config.GetBool("General", "EnableMise", false);
         EnableRustup = _initialRustup = config.GetBool("General", "EnableRustup", false);
         EnableFvm = _initialFvm = config.GetBool("General", "EnableFvm", false);
+
+        SelectedProxyMode = ProxyModes.FirstOrDefault(
+            option => option.Value == ((int)proxy.Mode).ToString()) ?? ProxyModes[0];
+        ProxyHost = proxy.Host;
+        ProxyPort = proxy.Port;
+        ProxyPacman = proxy.IsEnabledFor(Backend.Pacman);
+        ProxyFlatpak = proxy.IsEnabledFor(Backend.Flatpak);
+        ProxyCargo = proxy.IsEnabledFor(Backend.Cargo);
+        ProxyMise = proxy.IsEnabledFor(Backend.Mise);
+        ProxyRustup = proxy.IsEnabledFor(Backend.Rustup);
+        ProxyFvm = proxy.IsEnabledFor(Backend.Fvm);
     }
 
     public ObservableCollection<OptionItem> Languages { get; }
 
     public ObservableCollection<OptionItem> Themes { get; }
+
+    public ObservableCollection<OptionItem> ProxyModes { get; }
 
     public string LanguageLabel => Loc.T("Language:");
     public string ThemeLabel => Loc.T("Theme:");
@@ -64,6 +88,19 @@ public partial class SettingsViewModel : ObservableObject
     public string EnableFvmText => Loc.T("Enable fvm");
     public string OkText => Loc.T("OK");
     public string CancelText => Loc.T("Cancel");
+
+    public string ProxyGroup => Loc.T("Proxy");
+    public string ProxyModeLabel => Loc.T("Mode:");
+    public string ProxyHostLabel => Loc.T("Host:");
+    public string ProxyPortLabel => Loc.T("Port:");
+    public string ProxyTestText => Loc.T("Test");
+    public string ProxyPerBackendLabel => Loc.T("Use the proxy for:");
+    public string ProxyPacmanText => "Pacman / AUR";
+    public string ProxyFlatpakText => Loc.T("Flatpak");
+    public string ProxyCargoText => Loc.T("Cargo");
+    public string ProxyMiseText => "mise";
+    public string ProxyRustupText => "rustup";
+    public string ProxyFvmText => "fvm";
 
     [ObservableProperty]
     private OptionItem? _selectedLanguage;
@@ -92,6 +129,43 @@ public partial class SettingsViewModel : ObservableObject
     [ObservableProperty]
     private bool _enableFvm;
 
+    [ObservableProperty]
+    private OptionItem? _selectedProxyMode;
+
+    [ObservableProperty]
+    private string _proxyHost = string.Empty;
+
+    [ObservableProperty]
+    private decimal _proxyPort = 1080;
+
+    [ObservableProperty]
+    private string _proxyTestResult = string.Empty;
+
+    [ObservableProperty]
+    private bool _isProxyTesting;
+
+    [ObservableProperty]
+    private bool _proxyPacman;
+
+    [ObservableProperty]
+    private bool _proxyFlatpak;
+
+    [ObservableProperty]
+    private bool _proxyCargo;
+
+    [ObservableProperty]
+    private bool _proxyMise;
+
+    [ObservableProperty]
+    private bool _proxyRustup;
+
+    [ObservableProperty]
+    private bool _proxyFvm;
+
+    public bool IsProxyEnabled => SelectedProxyMode?.Value != "0";
+
+    public bool IsProxyNotTesting => !IsProxyTesting;
+
     public bool BackendsChanged =>
         EnablePacman != _initialPacman
         || EnableFlatpak != _initialFlatpak
@@ -99,6 +173,48 @@ public partial class SettingsViewModel : ObservableObject
         || EnableMise != _initialMise
         || EnableRustup != _initialRustup
         || EnableFvm != _initialFvm;
+
+    partial void OnSelectedProxyModeChanged(OptionItem? value)
+        => OnPropertyChanged(nameof(IsProxyEnabled));
+
+    partial void OnIsProxyTestingChanged(bool value)
+        => OnPropertyChanged(nameof(IsProxyNotTesting));
+
+    [RelayCommand]
+    private async Task TestProxyAsync()
+    {
+        var mode = (ProxyMode)int.Parse(SelectedProxyMode?.Value ?? "0");
+        var url = ProxySettings.MakeUrl(mode, ProxyHost.Trim(), (int)ProxyPort);
+        if (url.Length == 0)
+        {
+            ProxyTestResult = Loc.T("Invalid proxy configuration.");
+            return;
+        }
+
+        IsProxyTesting = true;
+        ProxyTestResult = Loc.T("Testing connection…");
+        try
+        {
+            using var handler = new HttpClientHandler
+            {
+                UseProxy = true,
+                Proxy = new WebProxy(url),
+            };
+            using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(8) };
+            using var response = await client.GetAsync("https://archlinux.org");
+            ProxyTestResult = response.IsSuccessStatusCode || (int)response.StatusCode < 500
+                ? Loc.T("Connection successful.")
+                : Loc.T("Connection failed: %1", $"HTTP {(int)response.StatusCode}");
+        }
+        catch (Exception exception)
+        {
+            ProxyTestResult = Loc.T("Connection failed: %1", exception.Message);
+        }
+        finally
+        {
+            IsProxyTesting = false;
+        }
+    }
 
     public void Save()
     {
@@ -111,8 +227,19 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "EnableMise", EnableMise);
         _config.Set("General", "EnableRustup", EnableRustup);
         _config.Set("General", "EnableFvm", EnableFvm);
-        _config.Save();
-        // The colour scheme applies immediately; the language needs a restart.
+
+        _proxy.Mode = (ProxyMode)int.Parse(SelectedProxyMode?.Value ?? "0");
+        _proxy.Host = ProxyHost.Trim();
+        _proxy.Port = (int)ProxyPort;
+        _proxy.SetEnabled(Backend.Pacman, ProxyPacman);
+        _proxy.SetEnabled(Backend.Flatpak, ProxyFlatpak);
+        _proxy.SetEnabled(Backend.Cargo, ProxyCargo);
+        _proxy.SetEnabled(Backend.Mise, ProxyMise);
+        _proxy.SetEnabled(Backend.Rustup, ProxyRustup);
+        _proxy.SetEnabled(Backend.Fvm, ProxyFvm);
+        // Writes the proxy keys and persists the general changes made above.
+        _proxy.Save(_config);
+
         App.ApplyTheme(SelectedTheme?.Value ?? "system");
     }
 }

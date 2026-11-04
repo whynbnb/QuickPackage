@@ -14,6 +14,23 @@ public sealed class ProxySettings
     public string Host { get; set; } = string.Empty;
     public int Port { get; set; } = 1080;
 
+    /// <summary>Backends that should receive the proxy environment. Defaults to all.</summary>
+    public HashSet<Backend> EnabledBackends { get; } =
+    [
+        Backend.Pacman, Backend.Flatpak, Backend.Cargo,
+        Backend.Mise, Backend.Rustup, Backend.Fvm,
+    ];
+
+    public bool IsEnabledFor(Backend backend) => EnabledBackends.Contains(backend);
+
+    public void SetEnabled(Backend backend, bool enabled)
+    {
+        if (enabled)
+            EnabledBackends.Add(backend);
+        else
+            EnabledBackends.Remove(backend);
+    }
+
     public string Scheme => Mode == ProxyMode.Socks5 ? "socks5" : "http";
 
     public string Url => MakeUrl(Mode, Host, Port);
@@ -28,6 +45,12 @@ public sealed class ProxySettings
         Mode = (ProxyMode)config.GetInt("Proxy", "Mode", 0);
         Host = config.GetString("Proxy", "Host");
         Port = config.GetInt("Proxy", "Port", 1080);
+        EnabledBackends.Clear();
+        foreach (var backend in Enum.GetValues<Backend>())
+        {
+            if (config.GetBool("Proxy", "Enable" + backend, true))
+                EnabledBackends.Add(backend);
+        }
     }
 
     public void Save(Config config)
@@ -35,6 +58,8 @@ public sealed class ProxySettings
         config.Set("Proxy", "Mode", (int)Mode);
         config.Set("Proxy", "Host", Host);
         config.Set("Proxy", "Port", Port);
+        foreach (var backend in Enum.GetValues<Backend>())
+            config.Set("Proxy", "Enable" + backend, IsEnabledFor(backend));
         config.Save();
     }
 
@@ -42,6 +67,9 @@ public sealed class ProxySettings
     /// Environment overrides handed to child processes. libcurl based tools
     /// (pacman, flatpak, cargo) also accept socks5:// in http_proxy.
     /// </summary>
+    public Dictionary<string, string> BuildEnvironment(Backend backend)
+        => IsEnabledFor(backend) ? BuildEnvironment() : [];
+
     public Dictionary<string, string> BuildEnvironment()
     {
         var environment = new Dictionary<string, string>

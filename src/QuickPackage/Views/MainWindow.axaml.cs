@@ -148,12 +148,6 @@ public partial class MainWindow : Window, IDialogService
         return await dialog.ShowDialog<bool>(this);
     }
 
-    public async Task<bool> ShowProxyAsync(ProxyViewModel viewModel)
-    {
-        var dialog = new ProxyWindow { DataContext = viewModel };
-        return await dialog.ShowDialog<bool>(this);
-    }
-
     public async Task<List<Package>?> ShowUpdatesAsync(UpdateViewModel viewModel)
     {
         var dialog = new UpdateWindow { DataContext = viewModel };

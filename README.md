@@ -16,7 +16,7 @@ C# 14 and Avalonia.
   never interleave, with a sticky header that keeps the current command in
   view; detail visibility, panel state and height are remembered
   (copy/clear included)
-- Proxy support (HTTP or SOCKS5) for every backend command
+- Proxy support (HTTP or SOCKS5) with per-backend enable switches
 - Light / dark / system theme and English / Simplified Chinese UI
 - `quickpackagerc` settings in the established format, so existing
   configurations keep working
@@ -59,4 +59,4 @@ Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 
 - `[General]` — language, theme, startup update check, the activity log's
   expanded state, height and detail visibility, and one `Enable*` key per backend
-- `[Proxy]` — mode, host and port
+- `[Proxy]` — mode, host, port and one `Enable*` key per backend

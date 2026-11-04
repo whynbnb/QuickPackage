@@ -913,7 +913,7 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private async Task SettingsAsync()
     {
-        var viewModel = new SettingsViewModel(_config);
+        var viewModel = new SettingsViewModel(_config, _proxy);
         if (!await _dialogs.ShowSettingsAsync(viewModel))
             return;
 
@@ -929,24 +929,15 @@ public partial class MainWindowViewModel : ObservableObject
         ApplyBackendSettings();
         RefreshModeUi();
         UpdateCounters();
+        StatusMessage = _proxy.Url.Length == 0
+            ? Loc.T("Proxy disabled")
+            : Loc.T("Proxy: %1", _proxy.Url);
         if (backendsChanged)
         {
             await RefreshAsync();
             if (_checkUpdatesOnStart)
                 await CheckUpdatesAsync();
         }
-    }
-
-    [RelayCommand]
-    private async Task ProxyAsync()
-    {
-        var viewModel = new ProxyViewModel(_proxy);
-        if (!await _dialogs.ShowProxyAsync(viewModel))
-            return;
-        _manager.SetProxy(_proxy);
-        StatusMessage = _proxy.Url.Length == 0
-            ? Loc.T("Proxy disabled")
-            : Loc.T("Proxy: %1", _proxy.Url);
     }
 
     [RelayCommand]
@@ -1040,10 +1031,14 @@ public partial class MainWindowViewModel : ObservableObject
         {
             using var handler = new HttpClientHandler();
             var proxyUrl = _proxy.Url;
-            if (proxyUrl.Length > 0)
+            if (proxyUrl.Length > 0 && _proxy.IsEnabledFor(Backend.Cargo))
             {
                 handler.UseProxy = true;
                 handler.Proxy = new WebProxy(proxyUrl);
+            }
+            else
+            {
+                handler.UseProxy = false;
             }
             using var client = new HttpClient(handler) { Timeout = TimeSpan.FromSeconds(15) };
             client.DefaultRequestHeaders.UserAgent.ParseAdd("QuickPackage/1.0 (package manager)");

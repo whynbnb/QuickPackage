@@ -9,8 +9,6 @@ public interface IDialogService
 
     Task<bool> ShowSettingsAsync(SettingsViewModel viewModel);
 
-    Task<bool> ShowProxyAsync(ProxyViewModel viewModel);
-
     /// <summary>Returns the packages checked for update, or null when cancelled.</summary>
     Task<List<Core.Package>?> ShowUpdatesAsync(UpdateViewModel viewModel);
 }

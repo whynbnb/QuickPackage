@@ -25,7 +25,6 @@ public sealed class LocStrings : ObservableObject
     public string InstallSelected => Loc.T("Install Selected");
     public string RemoveSelected => Loc.T("Remove Selected");
     public string Preferences => Loc.T("Preferences…");
-    public string ConfigureProxy => Loc.T("Configure Proxy…");
 
     public string SystemPackages => Loc.T("System packages");
     public string DeveloperPackages => Loc.T("Developer packages");

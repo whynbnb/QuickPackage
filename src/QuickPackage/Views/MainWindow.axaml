@@ -35,7 +35,6 @@
       </MenuItem>
       <MenuItem Header="{Binding L.Settings}">
         <MenuItem Header="{Binding L.Preferences}" InputGesture="Ctrl+Shift+OemComma" Command="{Binding SettingsCommand}"/>
-        <MenuItem Header="{Binding L.ConfigureProxy}" Command="{Binding ProxyCommand}"/>
       </MenuItem>
       <MenuItem Header="{Binding L.Help}">
         <MenuItem Header="{Binding L.About}" Command="{Binding AboutCommand}"/>
