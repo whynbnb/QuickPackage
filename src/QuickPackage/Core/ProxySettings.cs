@@ -63,37 +63,50 @@ public sealed class ProxySettings
         config.Save();
     }
 
-    /// <summary>
-    /// Environment overrides handed to child processes. libcurl based tools
-    /// (pacman, flatpak, cargo) also accept socks5:// in http_proxy.
-    /// </summary>
-    public Dictionary<string, string> BuildEnvironment(Backend backend)
-        => IsEnabledFor(backend) ? BuildEnvironment() : [];
+    /// <summary>Proxy variables understood by curl, reqwest and flatpak.</summary>
+    private static readonly string[] ProxyVariables =
+    [
+        "ALL_PROXY", "all_proxy",
+        "HTTP_PROXY", "http_proxy",
+        "HTTPS_PROXY", "https_proxy",
+    ];
 
-    public Dictionary<string, string> BuildEnvironment()
+    public Dictionary<string, string?> BuildEnvironment(Backend backend)
+        => IsEnabledFor(backend) ? BuildEnvironment() : ClearedEnvironment();
+
+    /// <summary>Environment overrides handed to child processes.</summary>
+    public Dictionary<string, string?> BuildEnvironment()
     {
-        var environment = new Dictionary<string, string>
+        var url = Url;
+        if (url.Length == 0)
+            return ClearedEnvironment();
+
+        // socks5h resolves host names at the proxy. curl/reqwest/flatpak fail
+        // with plain socks5 on systems that cannot resolve the target locally.
+        var environmentUrl = Mode == ProxyMode.Socks5
+            ? url.Replace("socks5://", "socks5h://", StringComparison.Ordinal)
+            : url;
+
+        var environment = new Dictionary<string, string?>
         {
             ["NO_PROXY"] = "localhost,127.0.0.1,::1",
             ["no_proxy"] = "localhost,127.0.0.1,::1",
         };
-        var url = Url;
-        if (url.Length == 0)
-            return environment;
+        foreach (var key in ProxyVariables)
+            environment[key] = environmentUrl;
+        return environment;
+    }
 
-        environment["ALL_PROXY"] = url;
-        environment["all_proxy"] = url;
-        if (Mode == ProxyMode.Http)
-        {
-            foreach (var key in new[] { "http_proxy", "https_proxy", "HTTP_PROXY", "HTTPS_PROXY" })
-                environment[key] = url;
-        }
-        else
-        {
-            // curl/libcurl-based tools honour the socks5:// scheme here.
-            environment["http_proxy"] = url;
-            environment["https_proxy"] = url;
-        }
+    /// <summary>
+    /// Removes inherited proxy variables. Empty values are not equivalent for
+    /// every tool (reqwest can hang on an empty ALL_PROXY), so the child
+    /// process must not receive the variable at all.
+    /// </summary>
+    private static Dictionary<string, string?> ClearedEnvironment()
+    {
+        var environment = new Dictionary<string, string?>();
+        foreach (var key in ProxyVariables)
+            environment[key] = null;
         return environment;
     }
 }

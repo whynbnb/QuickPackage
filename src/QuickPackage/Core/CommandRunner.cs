@@ -21,7 +21,7 @@ public static class CommandRunner
         string executable,
         IEnumerable<string> arguments,
         int timeoutMilliseconds,
-        IReadOnlyDictionary<string, string>? extraEnvironment = null,
+        IReadOnlyDictionary<string, string?>? extraEnvironment = null,
         CancellationToken cancellationToken = default,
         bool operation = false)
     {
@@ -45,7 +45,12 @@ public static class CommandRunner
         if (extraEnvironment is not null)
         {
             foreach (var (key, value) in extraEnvironment)
-                startInfo.Environment[key] = value;
+            {
+                if (value is null)
+                    startInfo.Environment.Remove(key);
+                else
+                    startInfo.Environment[key] = value;
+            }
         }
 
         var output = new StringBuilder();

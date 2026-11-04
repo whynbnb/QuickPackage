@@ -19,8 +19,8 @@ public sealed partial class PackageManager
         [Backend.Fvm] = false,
     };
 
-    private IReadOnlyDictionary<Backend, IReadOnlyDictionary<string, string>> _proxyEnvironments =
-        new Dictionary<Backend, IReadOnlyDictionary<string, string>>();
+    private IReadOnlyDictionary<Backend, IReadOnlyDictionary<string, string?>> _proxyEnvironments =
+        new Dictionary<Backend, IReadOnlyDictionary<string, string?>>();
 
     // Read-only queries must not hang forever on a broken mirror/network.
     private int _queryTimeoutMilliseconds = 30_000;
@@ -40,16 +40,16 @@ public sealed partial class PackageManager
 
     public void SetProxy(ProxySettings proxy)
     {
-        var environments = new Dictionary<Backend, IReadOnlyDictionary<string, string>>();
+        var environments = new Dictionary<Backend, IReadOnlyDictionary<string, string?>>();
         foreach (var backend in Enum.GetValues<Backend>())
             environments[backend] = proxy.BuildEnvironment(backend);
         _proxyEnvironments = environments;
     }
 
-    private IReadOnlyDictionary<string, string>? ProxyEnvironment(Backend backend)
+    private IReadOnlyDictionary<string, string?>? ProxyEnvironment(Backend backend)
         => _proxyEnvironments.TryGetValue(backend, out var environment) ? environment : null;
 
-    private IReadOnlyDictionary<string, string>? EnvironmentWith(
+    private IReadOnlyDictionary<string, string?>? EnvironmentWith(
         Backend backend, params (string Key, string Value)[] overrides)
     {
         _proxyEnvironments.TryGetValue(backend, out var proxy);
@@ -57,8 +57,8 @@ public sealed partial class PackageManager
             return null;
 
         var environment = proxy is null
-            ? new Dictionary<string, string>()
-            : new Dictionary<string, string>(proxy);
+            ? new Dictionary<string, string?>()
+            : new Dictionary<string, string?>(proxy);
         foreach (var (key, value) in overrides)
             environment[key] = value;
         return environment;
@@ -499,7 +499,7 @@ public sealed partial class PackageManager
         {
             var line = rawLine.Trim();
             var separator = line.IndexOf(" - ", StringComparison.Ordinal);
-            if (separator < 0 || !line.Contains("Update available", StringComparison.Ordinal))
+            if (separator < 0 || !line.Contains("update available", StringComparison.OrdinalIgnoreCase))
                 continue;
             var name = line[..separator].Trim();
             if (name.Length == 0)
