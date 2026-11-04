@@ -3,8 +3,8 @@ namespace QuickPackage.Core;
 /// <summary>An external command that has started.</summary>
 public sealed record CommandStarted(long Id, string CommandLine, bool Operation);
 
-/// <summary>One line of output produced by a running command.</summary>
-public sealed record CommandOutput(long Id, string Line);
+/// <summary>A batch of output lines (separated by '\n') from a running command.</summary>
+public sealed record CommandOutput(long Id, string Text);
 
 /// <summary>An external command that has finished.</summary>
 public sealed record CommandFinished(

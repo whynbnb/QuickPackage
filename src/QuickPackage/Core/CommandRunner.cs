@@ -9,6 +9,12 @@ public static class CommandRunner
 {
     public sealed record Result(bool Ok, string Output);
 
+    // Query commands such as "pacman -Qi" can print tens of thousands of
+    // lines. Batch them so the UI sees a handful of updates per second
+    // instead of one property change per line.
+    private const int OutputBatchMilliseconds = 100;
+    private const int OutputBatchMaxChars = 64 * 1024;
+
     private static readonly Regex AnsiEscape = new(@"\x1B\[[0-?]*[ -/]*[@-~]", RegexOptions.Compiled);
 
     public static async Task<Result> RunAsync(
@@ -17,12 +23,12 @@ public static class CommandRunner
         int timeoutMilliseconds,
         IReadOnlyDictionary<string, string>? extraEnvironment = null,
         CancellationToken cancellationToken = default,
-        bool logOutput = false)
+        bool operation = false)
     {
         var argumentList = arguments as IReadOnlyList<string> ?? arguments.ToList();
         var commandLine = FormatCommand(executable, argumentList);
         var activityId = CommandActivity.NextId();
-        CommandActivity.RaiseStarted(new CommandStarted(activityId, commandLine, logOutput));
+        CommandActivity.RaiseStarted(new CommandStarted(activityId, commandLine, operation));
 
         var startInfo = new ProcessStartInfo
         {
@@ -77,21 +83,23 @@ public static class CommandRunner
         }
         catch (Exception exception)
         {
-            if (logOutput)
-                CommandActivity.RaiseOutput(new CommandOutput(activityId, Sanitize(exception.Message)));
+            CommandActivity.RaiseOutput(new CommandOutput(activityId, Sanitize(exception.Message)));
             return new Result(false, exception.Message);
         }
         finally
         {
             process?.Dispose();
             CommandActivity.RaiseFinished(
-                new CommandFinished(activityId, commandLine, logOutput, ok, exitCode));
+                new CommandFinished(activityId, commandLine, operation, ok, exitCode));
         }
 
         // Read both streams concurrently: awaiting one stream fully would
         // deadlock as soon as the other pipe buffer fills up.
         async Task PumpAsync(StreamReader reader)
         {
+            var batch = new StringBuilder();
+            var batchStarted = Environment.TickCount64;
+            var lastRead = batchStarted;
             while (true)
             {
                 string? line;
@@ -109,12 +117,31 @@ public static class CommandRunner
                 lock (gate)
                     output.Append(line).Append('\n');
 
-                if (!logOutput)
-                    continue;
+                var now = Environment.TickCount64;
+                var gap = now - lastRead;
+                lastRead = now;
+
                 var clean = Sanitize(line);
                 if (clean.Length > 0)
-                    CommandActivity.RaiseOutput(new CommandOutput(activityId, clean));
+                {
+                    if (batch.Length > 0)
+                        batch.Append('\n');
+                    batch.Append(clean);
+                }
+
+                if (batch.Length > 0
+                    && (gap >= OutputBatchMilliseconds
+                        || now - batchStarted >= OutputBatchMilliseconds
+                        || batch.Length >= OutputBatchMaxChars))
+                {
+                    CommandActivity.RaiseOutput(new CommandOutput(activityId, batch.ToString()));
+                    batch.Clear();
+                    batchStarted = now;
+                }
             }
+
+            if (batch.Length > 0)
+                CommandActivity.RaiseOutput(new CommandOutput(activityId, batch.ToString()));
         }
 
         string Snapshot()

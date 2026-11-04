@@ -25,12 +25,14 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly Dictionary<ChipKind, ChipViewModel> _chipByKind = [];
     private readonly Dictionary<string, string> _descriptionCache = new(StringComparer.Ordinal);
     private readonly bool _checkUpdatesOnStart;
-    private readonly ConcurrentQueue<(LogEntryKind Kind, string Text)> _pendingLog = new();
+    private readonly ConcurrentQueue<Action> _pendingLog = new();
+    private readonly Dictionary<long, LogItemViewModel> _commandsByActivity = [];
     private readonly Dictionary<long, string> _activeCommands = [];
     private string _languageSetting = "system";
     private int _logFlushScheduled;
+    private bool _logDirty;
 
-    private const int MaxLogEntries = 500;
+    private const int MaxLogItems = 40;
     private const double MinLogPanelHeight = 90;
     private const double MaxLogPanelHeight = 600;
 
@@ -59,13 +61,19 @@ public partial class MainWindowViewModel : ObservableObject
         LoadBackendSettings();
         ApplyBackendSettings();
 
-        _isLogExpanded = _config.GetBool("General", "LogPanelExpanded", true);
+        _isLogExpanded = _config.GetBool("General", "LogPanelExpanded", false);
+        _isLogDetailed = _config.GetBool("General", "LogDetails", true);
         _logPanelHeight = Math.Clamp(
             _config.GetInt("General", "LogPanelHeight", 170), (int)MinLogPanelHeight, (int)MaxLogPanelHeight);
 
         _manager.Message += message =>
         {
-            AddLog(LogEntryKind.Info, message);
+            AddLog(() =>
+            {
+                LogItems.Add(LogItemViewModel.CreateInfo(message));
+                TrimLog();
+                _logDirty = true;
+            });
             Dispatcher.UIThread.Post(() => StatusMessage = message);
         };
         CommandActivity.Started += OnCommandStarted;
@@ -87,7 +95,10 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<DetailFieldViewModel> DetailFields { get; } = [];
 
-    public ObservableCollection<LogEntryViewModel> LogEntries { get; } = [];
+    public ObservableCollection<LogItemViewModel> LogItems { get; } = [];
+
+    /// <summary>Raised after a batch of log changes has been applied on the UI thread.</summary>
+    public event Action? LogUpdated;
 
     [ObservableProperty]
     private string _searchText = string.Empty;
@@ -105,7 +116,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isBusy;
 
     [ObservableProperty]
-    private string _countText = string.Empty;
+    private string _selectionText = string.Empty;
 
     [ObservableProperty]
     private string _updatesChipText = string.Empty;
@@ -141,16 +152,25 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isLogExpanded;
 
     [ObservableProperty]
+    private bool _isLogDetailed = true;
+
+    [ObservableProperty]
     private double _logPanelHeight = 170;
 
     [ObservableProperty]
     private string _currentCommand = string.Empty;
 
+    [ObservableProperty]
+    private LogItemViewModel? _logContext;
+
     public bool IsNotBusy => !IsBusy;
 
-    public bool HasCurrentCommand => CurrentCommand.Length > 0;
+    /// <summary>Single-line footer: the live command while busy, otherwise the last status.</summary>
+    public string FooterText => CurrentCommand.Length > 0 ? CurrentCommand : StatusMessage;
 
     public string LogChevron => IsLogExpanded ? "▾" : "▸";
+
+    public bool ShowLogContext => IsLogDetailed && LogContext is not null;
 
     public bool CanInstallRemove => HasSelection && !IsBusy;
 
@@ -208,9 +228,27 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSelectedPackageChanged(PackageItemViewModel? value) => RebuildDetail(value);
 
-    partial void OnCurrentCommandChanged(string value) => OnPropertyChanged(nameof(HasCurrentCommand));
+    private void OnPackagePropertyChanged(object? sender, PropertyChangedEventArgs args)
+    {
+        if (args.PropertyName == nameof(PackageItemViewModel.IsSelected))
+            UpdateCounters();
+    }
+
+    partial void OnCurrentCommandChanged(string value) => OnPropertyChanged(nameof(FooterText));
+
+    partial void OnStatusMessageChanged(string value) => OnPropertyChanged(nameof(FooterText));
 
     partial void OnIsLogExpandedChanged(bool value) => OnPropertyChanged(nameof(LogChevron));
+
+    partial void OnIsLogDetailedChanged(bool value)
+    {
+        foreach (var item in LogItems)
+            item.ShowDetails = value;
+        OnPropertyChanged(nameof(ShowLogContext));
+    }
+
+    partial void OnLogContextChanged(LogItemViewModel? value)
+        => OnPropertyChanged(nameof(ShowLogContext));
 
     public async Task InitializeAsync()
     {
@@ -467,7 +505,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!HasUpdates && ShowUpdatesOnly)
             ShowUpdatesOnly = false;
 
-        CountText = Loc.T("%1 selected · %2 updates", selected, totalUpdates);
+        SelectionText = selected > 0 ? Loc.T("Selected: %1", selected) : string.Empty;
         HasSelection = selected > 0;
     }
 
@@ -519,7 +557,13 @@ public partial class MainWindowViewModel : ObservableObject
             var packages = await _manager.LoadPackagesAsync(_operationCts.Token);
             _all.Clear();
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
-                _all.Add(new PackageItemViewModel(package));
+            {
+                var item = new PackageItemViewModel(package);
+                // Keep the footer selection count and action buttons in sync
+                // when a card's checkbox is toggled.
+                item.PropertyChanged += OnPackagePropertyChanged;
+                _all.Add(item);
+            }
             if (_updatesLoaded)
                 ApplyUpdatesToModels();
             ApplyFilter();
@@ -741,40 +785,39 @@ public partial class MainWindowViewModel : ObservableObject
 
     private void OnCommandStarted(CommandStarted activity)
     {
-        AddLog(LogEntryKind.Command, "$ " + activity.CommandLine);
-        Dispatcher.UIThread.Post(() =>
+        AddLog(() =>
         {
+            var item = LogItemViewModel.CreateCommand(activity.Id, activity.CommandLine, activity.Operation);
+            item.ShowDetails = IsLogDetailed;
+            _commandsByActivity[activity.Id] = item;
+            LogItems.Add(item);
+            TrimLog();
             _activeCommands[activity.Id] = activity.CommandLine;
             UpdateCurrentCommand();
+            _logDirty = true;
         });
     }
 
-    private void OnCommandOutput(CommandOutput activity) => AddLog(LogEntryKind.Output, activity.Line);
+    private void OnCommandOutput(CommandOutput activity)
+    {
+        AddLog(() =>
+        {
+            if (!_commandsByActivity.TryGetValue(activity.Id, out var item))
+                return;
+            item.Append(activity.Text);
+            _logDirty = true;
+        });
+    }
 
     private void OnCommandFinished(CommandFinished activity)
     {
-        if (activity.Operation)
+        AddLog(() =>
         {
-            // Mutating commands (install/remove/update) carry real output, so
-            // their exit status deserves a clear success/failure line.
-            AddLog(
-                activity.Ok ? LogEntryKind.Success : LogEntryKind.Error,
-                activity.Ok
-                    ? "\u2713 " + activity.CommandLine
-                    : $"\u2717 {activity.CommandLine} ({Loc.T("exit %1", activity.ExitCode)})");
-        }
-        else
-        {
-            // Read-only queries (e.g. checkupdates exits 2 when nothing is
-            // pending) are informational, never failures.
-            AddLog(
-                LogEntryKind.Info,
-                $"\u00B7 {activity.CommandLine} ({Loc.T("exit %1", activity.ExitCode)})");
-        }
-        Dispatcher.UIThread.Post(() =>
-        {
+            if (_commandsByActivity.Remove(activity.Id, out var item))
+                item.Finish(activity.Ok, activity.ExitCode);
             _activeCommands.Remove(activity.Id);
             UpdateCurrentCommand();
+            _logDirty = true;
         });
     }
 
@@ -785,10 +828,10 @@ public partial class MainWindowViewModel : ObservableObject
             : _activeCommands.OrderByDescending(pair => pair.Key).First().Value;
     }
 
-    /// <summary>Queues a log line; the UI drains the queue on the dispatching thread.</summary>
-    private void AddLog(LogEntryKind kind, string text)
+    /// <summary>Queues a UI-thread log mutation; concurrent commands stay separated.</summary>
+    private void AddLog(Action action)
     {
-        _pendingLog.Enqueue((kind, text));
+        _pendingLog.Enqueue(action);
         if (Interlocked.Exchange(ref _logFlushScheduled, 1) == 0)
             Dispatcher.UIThread.Post(FlushLog, DispatcherPriority.Background);
     }
@@ -796,10 +839,24 @@ public partial class MainWindowViewModel : ObservableObject
     private void FlushLog()
     {
         Interlocked.Exchange(ref _logFlushScheduled, 0);
-        while (_pendingLog.TryDequeue(out var entry))
-            LogEntries.Add(new LogEntryViewModel(entry.Kind, entry.Text));
-        while (LogEntries.Count > MaxLogEntries)
-            LogEntries.RemoveAt(0);
+        while (_pendingLog.TryDequeue(out var action))
+            action();
+        if (!_logDirty)
+            return;
+        _logDirty = false;
+        LogUpdated?.Invoke();
+    }
+
+    /// <summary>Drops the oldest finished blocks; running commands are never removed.</summary>
+    private void TrimLog()
+    {
+        while (LogItems.Count > MaxLogItems)
+        {
+            var victim = LogItems.FirstOrDefault(item => !item.IsRunning);
+            if (victim is null)
+                break;
+            LogItems.Remove(victim);
+        }
     }
 
     [RelayCommand]
@@ -812,17 +869,24 @@ public partial class MainWindowViewModel : ObservableObject
     [RelayCommand]
     private void ClearLog()
     {
-        LogEntries.Clear();
-        while (_pendingLog.TryDequeue(out _))
+        // Keep running commands so their live output can still be followed.
+        for (var i = LogItems.Count - 1; i >= 0; --i)
         {
-            // Drop anything that has not been painted yet.
+            if (!LogItems[i].IsRunning)
+                LogItems.RemoveAt(i);
         }
+        // Pending events are kept: dropping a finish event would leave a
+        // running block stuck in "Running…" forever.
+        LogContext = null;
+        LogUpdated?.Invoke();
     }
 
     [RelayCommand]
     private async Task CopyLogAsync()
     {
-        var text = string.Join(Environment.NewLine, LogEntries.Select(entry => entry.Text));
+        var text = string.Join(
+            Environment.NewLine + Environment.NewLine,
+            LogItems.Select(item => item.ToText()));
         var window = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
         if (window?.Clipboard is { } clipboard)
             await clipboard.SetTextAsync(text);
@@ -840,6 +904,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _config.Set("General", "LogPanelHeight", (int)Math.Round(LogPanelHeight));
         _config.Set("General", "LogPanelExpanded", IsLogExpanded);
+        _config.Set("General", "LogDetails", IsLogDetailed);
         _config.Save();
     }
 
@@ -1013,6 +1078,8 @@ public partial class MainWindowViewModel : ObservableObject
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
         L.NotifyAll();
+        foreach (var item in LogItems)
+            item.RefreshLocalization();
         UpdateCounters();
         RebuildDetail(SelectedPackage);
         StatusMessage = Loc.T("Ready");

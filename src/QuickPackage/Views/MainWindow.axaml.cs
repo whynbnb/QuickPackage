@@ -1,9 +1,9 @@
-using System.Collections.Specialized;
 using System.ComponentModel;
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Threading;
-using Avalonia.VisualTree;
 using QuickPackage.Core;
 using QuickPackage.ViewModels;
 
@@ -13,6 +13,7 @@ public partial class MainWindow : Window, IDialogService
 {
     private readonly MainWindowViewModel _viewModel;
     private bool _closeConfirmed;
+    private bool _logScrollQueued;
 
     public MainWindow()
     {
@@ -20,25 +21,78 @@ public partial class MainWindow : Window, IDialogService
         Core.FontStrategy.ApplyTextOptions(this);
         _viewModel = new MainWindowViewModel(this);
         DataContext = _viewModel;
-        _viewModel.LogEntries.CollectionChanged += OnLogEntriesChanged;
+        _viewModel.LogUpdated += ScrollLogToEnd;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
         Closing += OnClosing;
     }
 
-    private void OnLogEntriesChanged(object? sender, NotifyCollectionChangedEventArgs e) => ScrollLogToEnd();
-
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(MainWindowViewModel.IsLogExpanded))
+        if (e.PropertyName is nameof(MainWindowViewModel.IsLogExpanded)
+            or nameof(MainWindowViewModel.IsLogDetailed))
             ScrollLogToEnd();
     }
 
     private void ScrollLogToEnd()
     {
-        if (!_viewModel.IsLogExpanded)
+        if (!_viewModel.IsLogExpanded || _logScrollQueued)
             return;
-        Dispatcher.UIThread.Post(() => LogScroll.ScrollToEnd(), DispatcherPriority.Background);
+        _logScrollQueued = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _logScrollQueued = false;
+            LogScroll.ScrollToEnd();
+            UpdateLogContext();
+        }, DispatcherPriority.Loaded);
+    }
+
+    private void OnLogDetailsClick(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not CheckBox checkBox)
+            return;
+        _viewModel.IsLogDetailed = checkBox.IsChecked == true;
+        _viewModel.SaveLogPanelState();
+    }
+
+    private void OnLogScrollChanged(object? sender, ScrollChangedEventArgs e)
+        => UpdateLogContext();
+
+    /// <summary>
+    /// Keeps the sticky header on the command whose block occupies the top of
+    /// the viewport, so long output never loses its command context.
+    /// </summary>
+    private void UpdateLogContext()
+    {
+        if (!_viewModel.IsLogExpanded || !_viewModel.IsLogDetailed)
+        {
+            _viewModel.LogContext = null;
+            return;
+        }
+
+        var items = _viewModel.LogItems;
+        if (items.Count == 0)
+        {
+            _viewModel.LogContext = null;
+            return;
+        }
+
+        LogItemViewModel? candidate = null;
+        var offset = LogScroll.Offset.Y + 1;
+        for (var i = 0; i < items.Count; i++)
+        {
+            if (LogList.ContainerFromIndex(i) is not Control container)
+                continue;
+            var position = container.TranslatePoint(new Point(0, 0), LogList);
+            if (position is null)
+                continue;
+            if (position.Value.Y <= offset)
+                candidate = items[i];
+            else
+                break;
+        }
+
+        _viewModel.LogContext = candidate ?? items[0];
     }
 
     private void OnLogResizeDrag(object? sender, VectorEventArgs e)
@@ -52,6 +106,7 @@ public partial class MainWindow : Window, IDialogService
         try
         {
             await _viewModel.InitializeAsync();
+            Dispatcher.UIThread.Post(UpdateLogContext, DispatcherPriority.Loaded);
         }
         catch (Exception exception)
         {

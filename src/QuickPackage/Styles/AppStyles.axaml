@@ -118,6 +118,42 @@
     <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
   </Style>
 
+  <!-- Tiny checkbox used for the activity log's detail switch, sized to the
+       status-bar text so it never increases the footer height. -->
+  <Style Selector="CheckBox.compact">
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="MinHeight" Value="0"/>
+    <Setter Property="Padding" Value="0"/>
+    <Setter Property="Margin" Value="0"/>
+    <Setter Property="VerticalAlignment" Value="Center"/>
+    <Setter Property="Template">
+      <ControlTemplate>
+        <StackPanel Orientation="Horizontal" Spacing="5" VerticalAlignment="Center">
+          <Border Name="box" Width="13" Height="13" CornerRadius="3"
+                  BorderThickness="1" BorderBrush="{DynamicResource CardBorderBrush}"
+                  Background="Transparent" VerticalAlignment="Center">
+            <Path Name="check" Data="M 1,4 L 3.5,6.5 L 8,1"
+                  Stroke="{DynamicResource ChipCheckedTextBrush}" StrokeThickness="1.6"
+                  Width="9" Height="7" Stretch="Uniform"
+                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                  IsVisible="False"/>
+          </Border>
+          <ContentPresenter Content="{TemplateBinding Content}" VerticalAlignment="Center"/>
+        </StackPanel>
+      </ControlTemplate>
+    </Setter>
+  </Style>
+  <Style Selector="CheckBox.compact:checked /template/ Border#box">
+    <Setter Property="Background" Value="{DynamicResource ChipCheckedBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource ChipCheckedBrush}"/>
+  </Style>
+  <Style Selector="CheckBox.compact:checked /template/ Path#check">
+    <Setter Property="IsVisible" Value="True"/>
+  </Style>
+  <Style Selector="CheckBox.compact:pointerover /template/ Border#box">
+    <Setter Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+
   <!-- Drag handle on the activity log's top edge. -->
   <Style Selector="Thumb.logresize">
     <Setter Property="Height" Value="7"/>
