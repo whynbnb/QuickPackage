@@ -85,6 +85,13 @@ public sealed partial class LogItemViewModel : ObservableObject
 
     public bool IsRunning => State == LogItemState.Running;
 
+    private bool HasFailedExit => IsCommand && State switch
+    {
+        LogItemState.Failure => true,
+        LogItemState.QueryDone => _endReason != CommandEndReason.Completed || _exitCode != 0,
+        _ => false,
+    };
+
     public string StatusText
     {
         get
@@ -96,12 +103,12 @@ public sealed partial class LogItemViewModel : ObservableObject
             if (_endReason is CommandEndReason.TimedOut or CommandEndReason.Cancelled)
             {
                 var reason = Loc.T(_endReason == CommandEndReason.TimedOut ? "Timed out" : "Cancelled");
-                return (State == LogItemState.Failure ? "\u2717 " : "\u00B7 ") + reason;
+                return (HasFailedExit ? "\u2717 " : "\u00B7 ") + reason;
             }
             return State switch
             {
                 LogItemState.Failure => "\u2717 " + Loc.T("exit %1", _exitCode),
-                LogItemState.QueryDone => "\u00B7 " + Loc.T("exit %1", _exitCode),
+                LogItemState.QueryDone => (HasFailedExit ? "\u2717 " : "\u00B7 ") + Loc.T("exit %1", _exitCode),
                 _ => string.Empty,
             };
         }
@@ -109,7 +116,8 @@ public sealed partial class LogItemViewModel : ObservableObject
 
     public IBrush? HeaderBrush => State switch
     {
-        LogItemState.Info or LogItemState.QueryDone => SubtleBrush,
+        LogItemState.Info => SubtleBrush,
+        LogItemState.QueryDone => HasFailedExit ? ErrorBrush : SubtleBrush,
         LogItemState.Failure => ErrorBrush,
         _ => CommandBrush,
     };
@@ -118,7 +126,8 @@ public sealed partial class LogItemViewModel : ObservableObject
     {
         LogItemState.Success => SuccessBrush,
         LogItemState.Failure => ErrorBrush,
-        LogItemState.Running or LogItemState.QueryDone => SubtleBrush,
+        LogItemState.Running => SubtleBrush,
+        LogItemState.QueryDone => HasFailedExit ? ErrorBrush : SubtleBrush,
         _ => null,
     };
 
