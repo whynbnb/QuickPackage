@@ -78,21 +78,23 @@ public sealed partial class PackageManager
     /// <summary>
     /// Captures the installed packages using each backend's native export
     /// command, falling back to the already-loaded package list when a
-    /// backend has no usable export command.
+    /// backend has no usable export command. Entries are enriched with the
+    /// install reason and origin from the normal query.
     /// </summary>
     public async Task<PackageSnapshot> CaptureSnapshotAsync(CancellationToken cancellationToken)
     {
         var loaded = await LoadPackagesAsync(cancellationToken).ConfigureAwait(false);
+        var lookup = BuildSnapshotLookup(loaded);
         var entries = new List<SnapshotEntry>();
 
         if (_enabled[Backend.Pacman])
-            await AddPacmanExportAsync(entries, Backend.Pacman, "-Qen", loaded, cancellationToken).ConfigureAwait(false);
+            await AddPacmanExportAsync(entries, Backend.Pacman, "-Qn", lookup, loaded, cancellationToken).ConfigureAwait(false);
         if (_enabled[Backend.Aur])
-            await AddPacmanExportAsync(entries, Backend.Aur, "-Qem", loaded, cancellationToken).ConfigureAwait(false);
+            await AddPacmanExportAsync(entries, Backend.Aur, "-Qm", lookup, loaded, cancellationToken).ConfigureAwait(false);
         if (_enabled[Backend.Flatpak])
-            await AddFlatpakExportAsync(entries, loaded, cancellationToken).ConfigureAwait(false);
+            await AddFlatpakExportAsync(entries, lookup, loaded, cancellationToken).ConfigureAwait(false);
         if (_enabled[Backend.Cargo])
-            await AddCargoExportAsync(entries, loaded, cancellationToken).ConfigureAwait(false);
+            await AddCargoExportAsync(entries, lookup, loaded, cancellationToken).ConfigureAwait(false);
 
         // These backends only expose their installed set through the same
         // listing commands the normal query already uses.
@@ -112,9 +114,40 @@ public sealed partial class PackageManager
         return new PackageSnapshot { Packages = packages };
     }
 
+    private static Dictionary<(Backend, string), Package> BuildSnapshotLookup(List<Package> loaded)
+    {
+        var lookup = new Dictionary<(Backend, string), Package>();
+        foreach (var package in loaded)
+        {
+            lookup.TryAdd((package.Backend, package.Name), package);
+            if (package.PackageId.Length > 0)
+                lookup.TryAdd((package.Backend, package.PackageId), package);
+        }
+        return lookup;
+    }
+
+    private static void AddSnapshotEntry(
+        List<SnapshotEntry> entries, Backend backend, string name, string version,
+        Dictionary<(Backend, string), Package> lookup)
+    {
+        lookup.TryGetValue((backend, name), out var package);
+        entries.Add(new SnapshotEntry
+        {
+            Backend = backend,
+            Name = name,
+            Version = version,
+            Origin = package?.Origin ?? string.Empty,
+            Explicit = backend is Backend.Pacman or Backend.Aur
+                ? package?.Explicit ?? false
+                : null,
+            Orphan = package?.Orphan ?? false,
+        });
+    }
+
     private async Task AddPacmanExportAsync(
         List<SnapshotEntry> entries, Backend backend, string query,
-        List<Package> loaded, CancellationToken cancellationToken)
+        Dictionary<(Backend, string), Package> lookup, List<Package> loaded,
+        CancellationToken cancellationToken)
     {
         var run = await CommandRunner.RunAsync(
             "pacman", [query], _queryTimeoutMilliseconds,
@@ -131,17 +164,17 @@ public sealed partial class PackageManager
             if (line.Length == 0)
                 continue;
             var space = line.IndexOf(' ');
-            entries.Add(new SnapshotEntry
-            {
-                Backend = backend,
-                Name = space < 0 ? line : line[..space],
-                Version = space < 0 ? string.Empty : line[(space + 1)..].Trim(),
-            });
+            AddSnapshotEntry(
+                entries, backend,
+                space < 0 ? line : line[..space],
+                space < 0 ? string.Empty : line[(space + 1)..].Trim(),
+                lookup);
         }
     }
 
     private async Task AddFlatpakExportAsync(
-        List<SnapshotEntry> entries, List<Package> loaded, CancellationToken cancellationToken)
+        List<SnapshotEntry> entries, Dictionary<(Backend, string), Package> lookup,
+        List<Package> loaded, CancellationToken cancellationToken)
     {
         var run = await CommandRunner.RunAsync(
             "flatpak", ["list", "--app", "--columns=application,version"],
@@ -160,17 +193,15 @@ public sealed partial class PackageManager
             var columns = line.Split('\t');
             if (columns.Length == 0 || columns[0].Length == 0)
                 continue;
-            entries.Add(new SnapshotEntry
-            {
-                Backend = Backend.Flatpak,
-                Name = columns[0],
-                Version = columns.Length > 1 ? columns[1] : string.Empty,
-            });
+            AddSnapshotEntry(
+                entries, Backend.Flatpak, columns[0],
+                columns.Length > 1 ? columns[1] : string.Empty, lookup);
         }
     }
 
     private async Task AddCargoExportAsync(
-        List<SnapshotEntry> entries, List<Package> loaded, CancellationToken cancellationToken)
+        List<SnapshotEntry> entries, Dictionary<(Backend, string), Package> lookup,
+        List<Package> loaded, CancellationToken cancellationToken)
     {
         var run = await CommandRunner.RunAsync(
             "cargo", ["install", "--list"], _queryTimeoutMilliseconds,
@@ -185,32 +216,27 @@ public sealed partial class PackageManager
         {
             var match = CargoInstalledRegex().Match(rawLine.TrimEnd('\r'));
             if (match.Success)
-            {
-                entries.Add(new SnapshotEntry
-                {
-                    Backend = Backend.Cargo,
-                    Name = match.Groups[1].Value,
-                    Version = match.Groups[2].Value,
-                });
-            }
+                AddSnapshotEntry(
+                    entries, Backend.Cargo, match.Groups[1].Value,
+                    match.Groups[2].Value, lookup);
         }
     }
 
     private static void AddSnapshotFallback(
         List<SnapshotEntry> entries, List<Package> loaded, Backend backend)
     {
-        var explicitOnly = backend is Backend.Pacman or Backend.Aur;
         foreach (var package in loaded)
         {
             if (package.Backend != backend)
-                continue;
-            if (explicitOnly && !package.Explicit)
                 continue;
             entries.Add(new SnapshotEntry
             {
                 Backend = backend,
                 Name = package.Name,
                 Version = package.Version,
+                Origin = package.Origin,
+                Explicit = backend is Backend.Pacman or Backend.Aur ? package.Explicit : null,
+                Orphan = package.Orphan,
             });
         }
     }

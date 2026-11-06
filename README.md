@@ -15,9 +15,11 @@ C# 14 and Avalonia.
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
 - **Package snapshots** using each backend's native export where available
-  (pacman/AUR explicit lists, Flatpak refs, cargo's install list) with a
-  fallback to the normal listing; any two or more snapshots can be compared
-  side by side, with added / removed / version-changed packages highlighted
+  (pacman/AUR installed lists, Flatpak refs, cargo's install list) with a
+  fallback to the normal listing; every entry keeps its backend, repository,
+  orphan state and — for pacman/AUR — the explicit/dependency reason, and any
+  two or more snapshots can be compared — or filtered by backend and type —
+  with added / removed / version-changed packages highlighted
 - Per-package install/uninstall in the detail pane, plus a bulk update
   action while the update filter is active
 - Native **Wayland** windowing when the compositor is available, with an

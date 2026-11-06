@@ -6,9 +6,14 @@ namespace QuickPackage.Core;
 /// <summary>A point-in-time export of the enabled package backends.</summary>
 public sealed class PackageSnapshot
 {
+    public const int CurrentSchema = 3;
+
     public string Id { get; set; } = Guid.NewGuid().ToString("N");
 
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.Now;
+
+    /// <summary>Bumped when the entry shape changes so old files can migrate.</summary>
+    public int SchemaVersion { get; set; } = CurrentSchema;
 
     public List<SnapshotEntry> Packages { get; set; } = [];
 }
@@ -18,6 +23,15 @@ public sealed class SnapshotEntry
     public Backend Backend { get; set; }
     public string Name { get; set; } = string.Empty;
     public string Version { get; set; } = string.Empty;
+    public string Origin { get; set; } = string.Empty;
+
+    /// <summary>
+    /// True/false for backends with an install reason (pacman/AUR); null for
+    /// backends that do not have the concept at all.
+    /// </summary>
+    public bool? Explicit { get; set; }
+
+    public bool Orphan { get; set; }
 }
 
 /// <summary>Persists snapshots next to the main configuration file.</summary>
@@ -45,7 +59,28 @@ public static class SnapshotStore
             if (!File.Exists(FilePath))
                 return [];
             var json = File.ReadAllText(FilePath);
-            return JsonSerializer.Deserialize<List<PackageSnapshot>>(json, Options) ?? [];
+            var snapshots = JsonSerializer.Deserialize<List<PackageSnapshot>>(json, Options) ?? [];
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot.SchemaVersion >= PackageSnapshot.CurrentSchema)
+                    continue;
+                foreach (var entry in snapshot.Packages)
+                {
+                    if (entry.Backend is Backend.Pacman or Backend.Aur)
+                    {
+                        // Version 1 stored only the explicit lists.
+                        if (snapshot.SchemaVersion < 2)
+                            entry.Explicit = true;
+                    }
+                    else
+                    {
+                        // Other backends have no install-reason concept.
+                        entry.Explicit = null;
+                    }
+                }
+                snapshot.SchemaVersion = PackageSnapshot.CurrentSchema;
+            }
+            return snapshots;
         }
         catch
         {

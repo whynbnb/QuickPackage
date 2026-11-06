@@ -70,6 +70,10 @@ public partial class PackageItemViewModel : ObservableObject
         ? Loc.T("Explicit")
         : Loc.T("Dependency");
 
+    public bool ShowOrphan => Model.Orphan;
+
+    public string OrphanText => Loc.T("Orphan");
+
     public IBrush ReasonBackground
     {
         get
@@ -259,6 +263,8 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(OriginForeground));
         OnPropertyChanged(nameof(ShowInstallReason));
         OnPropertyChanged(nameof(InstallReasonText));
+        OnPropertyChanged(nameof(ShowOrphan));
+        OnPropertyChanged(nameof(OrphanText));
         OnPropertyChanged(nameof(ReasonBackground));
         OnPropertyChanged(nameof(ReasonBorderBrush));
         OnPropertyChanged(nameof(ReasonForeground));

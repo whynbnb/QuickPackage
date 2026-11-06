@@ -14,20 +14,27 @@ public partial class SnapshotListItemViewModel : ObservableObject
     public SnapshotListItemViewModel(PackageSnapshot snapshot)
     {
         Snapshot = snapshot;
-        var composition = string.Join(" · ", snapshot.Packages
+        var explicitCount = snapshot.Packages.Count(entry => entry.Explicit == true);
+        var dependencyCount = snapshot.Packages.Count(entry => entry.Explicit == false);
+        var orphanCount = snapshot.Packages.Count(entry => entry.Orphan);
+        CountText = Loc.T("%1 packages · %2 explicit · %3 dependency · %4 orphans",
+            snapshot.Packages.Count,
+            explicitCount,
+            dependencyCount,
+            orphanCount);
+        BackendText = string.Join(" · ", snapshot.Packages
             .GroupBy(entry => entry.Backend)
             .OrderBy(group => group.Key)
             .Select(group => $"{BackendInfo.DisplayName(group.Key)} {group.Count()}"));
-        DetailText = composition.Length == 0
-            ? Loc.T("%1 packages", snapshot.Packages.Count)
-            : Loc.T("%1 packages", snapshot.Packages.Count) + " · " + composition;
     }
 
     public PackageSnapshot Snapshot { get; }
 
     public string TimeText => Snapshot.CreatedAt.LocalDateTime.ToString("yyyy-MM-dd HH:mm:ss");
 
-    public string DetailText { get; }
+    public string CountText { get; }
+
+    public string BackendText { get; }
 
     [ObservableProperty]
     private bool _isSelected;
@@ -48,9 +55,14 @@ public sealed class SnapshotCellViewModel
 public sealed class SnapshotRowViewModel
 {
     public required string Name { get; init; }
-    public required string BackendLabel { get; init; }
+    public required string BackendText { get; init; }
+    public required string ReasonText { get; init; }
     public required IReadOnlyList<SnapshotCellViewModel> Cells { get; init; }
     public IBrush? NameForeground { get; init; }
+    public IBrush? ReasonForeground { get; init; }
+    public bool ShowReason { get; init; }
+    public bool ShowOrphan { get; init; }
+    public string OrphanText => Loc.T("Orphan");
 }
 
 /// <summary>Lists saved snapshots and compares any selected subset.</summary>
@@ -61,6 +73,29 @@ public partial class SnapshotsViewModel : ObservableObject
     public SnapshotsViewModel(PackageManager manager)
     {
         _manager = manager;
+
+        BackendFilters.Add(new OptionItem { Value = "all", Label = Loc.T("All backends") });
+        foreach (var backend in new[]
+                 {
+                     Backend.Pacman, Backend.Aur, Backend.Flatpak, Backend.Cargo,
+                     Backend.Mise, Backend.Rustup, Backend.Fvm,
+                 })
+        {
+            BackendFilters.Add(new OptionItem
+            {
+                Value = backend.ToString(),
+                Label = BackendInfo.DisplayName(backend),
+            });
+        }
+
+        ReasonFilters.Add(new OptionItem { Value = "all", Label = Loc.T("All reasons") });
+        ReasonFilters.Add(new OptionItem { Value = "explicit", Label = Loc.T("Explicit") });
+        ReasonFilters.Add(new OptionItem { Value = "dependency", Label = Loc.T("Dependency") });
+        ReasonFilters.Add(new OptionItem { Value = "orphan", Label = Loc.T("Orphan") });
+
+        _selectedBackendFilter = BackendFilters[0];
+        _selectedReasonFilter = ReasonFilters[0];
+
         foreach (var snapshot in SnapshotStore.Load().OrderByDescending(item => item.CreatedAt))
             AddItem(snapshot);
         Rebuild();
@@ -78,11 +113,27 @@ public partial class SnapshotsViewModel : ObservableObject
 
     public ObservableCollection<SnapshotRowViewModel> Rows { get; } = [];
 
+    public ObservableCollection<OptionItem> BackendFilters { get; } = [];
+
+    public ObservableCollection<OptionItem> ReasonFilters { get; } = [];
+
+    [ObservableProperty]
+    private OptionItem? _selectedBackendFilter;
+
+    [ObservableProperty]
+    private OptionItem? _selectedReasonFilter;
+
+    [ObservableProperty]
+    private string _searchText = string.Empty;
+
     [ObservableProperty]
     private bool _isBusy;
 
     [ObservableProperty]
     private string _summaryText = string.Empty;
+
+    [ObservableProperty]
+    private string _statsText = string.Empty;
 
     [ObservableProperty]
     private string _hintText = string.Empty;
@@ -101,8 +152,16 @@ public partial class SnapshotsViewModel : ObservableObject
     public string CreateText => Loc.T("Create snapshot");
     public string DeleteText => Loc.T("Delete selected");
     public string PackageHeader => Loc.T("Package");
-    public string BackendHeader => Loc.T("Backend");
+    public string BackendHeader => Loc.T("Backend / origin");
+    public string ReasonHeader => Loc.T("Install reason");
+    public string SearchPlaceholder => Loc.T("Filter snapshots…");
     public string LegendText => Loc.T("Green = added · orange = version changed · red = removed");
+
+    partial void OnSelectedBackendFilterChanged(OptionItem? value) => Rebuild();
+
+    partial void OnSelectedReasonFilterChanged(OptionItem? value) => Rebuild();
+
+    partial void OnSearchTextChanged(string value) => Rebuild();
 
     private SnapshotListItemViewModel AddItem(PackageSnapshot snapshot)
     {
@@ -182,6 +241,7 @@ public partial class SnapshotsViewModel : ObservableObject
         Columns.Clear();
         Rows.Clear();
         SummaryText = string.Empty;
+        StatsText = string.Empty;
 
         if (!ShowComparison)
         {
@@ -200,26 +260,29 @@ public partial class SnapshotsViewModel : ObservableObject
             });
         }
 
-        var maps = selected
-            .Select(snapshot => snapshot.Packages.ToDictionary(
-                entry => (entry.Backend, entry.Name),
-                entry => entry.Version))
-            .ToList();
+        var maps = selected.Select(MapOf).ToList();
         var keys = maps
             .SelectMany(map => map.Keys)
             .Distinct()
             .ToList();
 
-        var first = maps[0];
-        var last = maps[^1];
-        int added = 0, removed = 0, changed = 0;
+        var latest = selected[^1];
+        var explicitCount = latest.Packages.Count(entry => entry.Explicit == true);
+        StatsText = Loc.T("%1 explicit · %2 dependency · %3 orphans",
+            explicitCount,
+            latest.Packages.Count(entry => entry.Explicit == false),
+            latest.Packages.Count(entry => entry.Orphan));
+
         if (selected.Count == 1)
         {
             SummaryText = Loc.T("%1 snapshots · %2 packages",
-                selected.Count, selected[0].Packages.Count);
+                selected.Count, latest.Packages.Count);
         }
         else
         {
+            var first = maps[0];
+            var last = maps[^1];
+            int added = 0, removed = 0, changed = 0;
             foreach (var key in keys)
             {
                 var inFirst = first.ContainsKey(key);
@@ -228,7 +291,7 @@ public partial class SnapshotsViewModel : ObservableObject
                     ++added;
                 else if (inFirst && !inLast)
                     ++removed;
-                else if (inFirst && inLast && first[key] != last[key])
+                else if (inFirst && inLast && first[key].Version != last[key].Version)
                     ++changed;
             }
 
@@ -236,11 +299,39 @@ public partial class SnapshotsViewModel : ObservableObject
                 selected.Count, added, removed, changed);
         }
 
+        var backendFilter = SelectedBackendFilter?.Value ?? "all";
+        var reasonFilter = SelectedReasonFilter?.Value ?? "all";
+        var search = SearchText.Trim();
+
         var rows = new List<(SnapshotRowViewModel Row, bool Changed)>(keys.Count);
         foreach (var key in keys)
         {
+            SnapshotEntry? representative = null;
+            for (var i = maps.Count - 1; i >= 0 && representative is null; --i)
+                maps[i].TryGetValue(key, out representative);
+
+            if (representative is null)
+                continue;
+            if (backendFilter != "all" && representative.Backend.ToString() != backendFilter)
+                continue;
+            if (reasonFilter switch
+                {
+                    "explicit" => representative.Explicit != true,
+                    "dependency" => representative.Explicit != false,
+                    "orphan" => !representative.Orphan,
+                    _ => false,
+                })
+            {
+                continue;
+            }
+            if (search.Length > 0
+                && !representative.Name.Contains(search, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
             var versions = maps
-                .Select(map => map.TryGetValue(key, out var version) ? version : null)
+                .Select(map => map.TryGetValue(key, out var entry) ? entry.Version : null)
                 .ToList();
             var isChanged = versions.Distinct().Count() > 1;
 
@@ -272,10 +363,28 @@ public partial class SnapshotsViewModel : ObservableObject
                 });
             }
 
+            var backendText = BackendInfo.DisplayName(representative.Backend);
+            if (representative.Origin.Length > 0)
+                backendText += " · " + representative.Origin;
+
             rows.Add((new SnapshotRowViewModel
             {
-                Name = key.Name,
-                BackendLabel = BackendInfo.DisplayName(key.Backend),
+                Name = representative.Name,
+                BackendText = backendText,
+                ReasonText = representative.Explicit switch
+                {
+                    true => Loc.T("Explicit"),
+                    false => Loc.T("Dependency"),
+                    null => string.Empty,
+                },
+                ReasonForeground = representative.Explicit switch
+                {
+                    true => AddedBrush,
+                    false => ChangedBrush,
+                    null => null,
+                },
+                ShowReason = representative.Explicit.HasValue,
+                ShowOrphan = representative.Orphan,
                 Cells = cells,
                 NameForeground = isChanged ? ChangedBrush : NormalBrush,
             }, isChanged));
@@ -287,6 +396,14 @@ public partial class SnapshotsViewModel : ObservableObject
         {
             Rows.Add(row);
         }
+    }
+
+    private static Dictionary<(Backend, string), SnapshotEntry> MapOf(PackageSnapshot snapshot)
+    {
+        var map = new Dictionary<(Backend, string), SnapshotEntry>();
+        foreach (var entry in snapshot.Packages)
+            map.TryAdd((entry.Backend, entry.Name), entry);
+        return map;
     }
 
     private static bool IsDark => Application.Current?.ActualThemeVariant == ThemeVariant.Dark;

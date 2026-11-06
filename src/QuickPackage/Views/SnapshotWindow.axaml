@@ -25,9 +25,11 @@
 
     <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="12">
 
-      <Border Classes="pane">
+      <Border Classes="pane" ClipToBounds="True">
         <Grid Margin="8">
-          <ListBox ItemsSource="{Binding Items}" BorderThickness="0" Background="Transparent">
+          <ListBox ItemsSource="{Binding Items}" BorderThickness="0" Background="Transparent"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:SnapshotListItemViewModel">
                 <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,3">
@@ -35,7 +37,9 @@
                             VerticalAlignment="Center"/>
                   <StackPanel Grid.Column="1" Spacing="2">
                     <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" FontSize="13"/>
-                    <TextBlock Text="{Binding DetailText}" Classes="subtle" FontSize="11"
+                    <TextBlock Text="{Binding CountText}" Classes="subtle" FontSize="11"
+                               TextWrapping="Wrap"/>
+                    <TextBlock Text="{Binding BackendText}" Classes="subtle" FontSize="11"
                                TextWrapping="Wrap"/>
                   </StackPanel>
                 </Grid>
@@ -48,14 +52,30 @@
         </Grid>
       </Border>
 
-      <Border Grid.Column="1" Classes="pane">
-        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8" Margin="10">
+      <Border Grid.Column="1" Classes="pane" ClipToBounds="True">
+        <Grid RowDefinitions="Auto,Auto,Auto,*" RowSpacing="8" Margin="10">
 
-          <TextBlock Grid.Row="0" Text="{Binding SummaryText}" FontWeight="SemiBold"/>
+          <StackPanel Grid.Row="0" Spacing="2">
+            <TextBlock Text="{Binding SummaryText}" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding StatsText}" Classes="subtle" FontSize="11"/>
+          </StackPanel>
 
-          <Grid Grid.Row="1" ColumnDefinitions="240,*" IsVisible="{Binding ShowComparison}">
+          <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBox Text="{Binding SearchText, Mode=TwoWay}"
+                     PlaceholderText="{Binding SearchPlaceholder}"/>
+            <ComboBox Grid.Column="1" Width="150"
+                      ItemsSource="{Binding BackendFilters}"
+                      SelectedItem="{Binding SelectedBackendFilter, Mode=TwoWay}"/>
+            <ComboBox Grid.Column="2" Width="150"
+                      ItemsSource="{Binding ReasonFilters}"
+                      SelectedItem="{Binding SelectedReasonFilter, Mode=TwoWay}"/>
+          </Grid>
+
+          <Grid Grid.Row="2" ColumnDefinitions="170,110,80,*" IsVisible="{Binding ShowComparison}">
             <TextBlock Text="{Binding PackageHeader}" Classes="subtle" FontSize="11"/>
-            <ItemsControl Grid.Column="1" ItemsSource="{Binding Columns}">
+            <TextBlock Grid.Column="1" Text="{Binding BackendHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="2" Text="{Binding ReasonHeader}" Classes="subtle" FontSize="11"/>
+            <ItemsControl Grid.Column="3" ItemsSource="{Binding Columns}">
               <ItemsControl.ItemsPanel>
                 <ItemsPanelTemplate>
                   <StackPanel Orientation="Horizontal"/>
@@ -63,7 +83,7 @@
               </ItemsControl.ItemsPanel>
               <ItemsControl.ItemTemplate>
                 <DataTemplate x:DataType="vm:SnapshotColumnViewModel">
-                  <Border Width="120">
+                  <Border Width="105">
                     <TextBlock Text="{Binding Label}" Classes="subtle" FontSize="11"
                                TextTrimming="CharacterEllipsis"/>
                   </Border>
@@ -72,19 +92,33 @@
             </ItemsControl>
           </Grid>
 
-          <Grid Grid.Row="2">
+          <Grid Grid.Row="3">
             <ListBox ItemsSource="{Binding Rows}" BorderThickness="0" Background="Transparent"
+                     ScrollViewer.VerticalScrollBarVisibility="Auto"
+                     ScrollViewer.HorizontalScrollBarVisibility="Auto"
                      IsVisible="{Binding ShowComparison}">
               <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="vm:SnapshotRowViewModel">
-                  <Grid ColumnDefinitions="240,*">
-                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                      <TextBlock Text="{Binding Name}" Foreground="{Binding NameForeground}"
-                                 FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="176"/>
-                      <TextBlock Text="{Binding BackendLabel}" Classes="subtle" FontSize="11"
-                                 VerticalAlignment="Center"/>
+                  <Grid ColumnDefinitions="170,110,80,*">
+                    <TextBlock Text="{Binding Name}" Foreground="{Binding NameForeground}"
+                               FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="156"
+                               VerticalAlignment="Center"/>
+                    <TextBlock Grid.Column="1" Text="{Binding BackendText}" Classes="subtle"
+                               FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="105"
+                               VerticalAlignment="Center"/>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4"
+                                VerticalAlignment="Center">
+                      <TextBlock Text="{Binding ReasonText}" Foreground="{Binding ReasonForeground}"
+                                 FontSize="12" IsVisible="{Binding ShowReason}"/>
+                      <Border Background="{DynamicResource DangerBackgroundBrush}"
+                              BorderBrush="{DynamicResource DangerBorderBrush}" BorderThickness="1"
+                              CornerRadius="6" Padding="5,0" IsVisible="{Binding ShowOrphan}"
+                              VerticalAlignment="Center">
+                        <TextBlock Text="{Binding OrphanText}" Foreground="{DynamicResource DangerBrush}"
+                                   FontSize="10"/>
+                      </Border>
                     </StackPanel>
-                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                    <ItemsControl Grid.Column="3" ItemsSource="{Binding Cells}">
                       <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                           <StackPanel Orientation="Horizontal"/>
@@ -92,7 +126,7 @@
                       </ItemsControl.ItemsPanel>
                       <ItemsControl.ItemTemplate>
                         <DataTemplate x:DataType="vm:SnapshotCellViewModel">
-                          <Border Width="120">
+                          <Border Width="105">
                             <TextBlock Text="{Binding Text}" Foreground="{Binding Foreground}"
                                        FontWeight="{Binding FontWeight}" FontSize="12"
                                        TextTrimming="CharacterEllipsis"/>

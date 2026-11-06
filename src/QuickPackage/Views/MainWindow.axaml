@@ -143,6 +143,13 @@
                             <TextBlock Text="{Binding InstallReasonText}" FontSize="11"
                                        Foreground="{Binding ReasonForeground}"/>
                           </Border>
+                          <Border Classes="pill tag" IsVisible="{Binding ShowOrphan}"
+                                  VerticalAlignment="Center"
+                                  Background="{DynamicResource DangerBackgroundBrush}"
+                                  BorderBrush="{DynamicResource DangerBorderBrush}">
+                            <TextBlock Text="{Binding OrphanText}" FontSize="11"
+                                       Foreground="{DynamicResource DangerBrush}"/>
+                          </Border>
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="subtle" FontSize="13"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"
