@@ -26,6 +26,12 @@ public sealed partial class PackageManager
     // Read-only queries must not hang forever on a broken mirror/network.
     private int _queryTimeoutMilliseconds = 30_000;
 
+    // Only paru and yay are supported; empty means auto-detect.
+    private string _preferredAurHelper = string.Empty;
+
+    public void SetAurHelper(string? helper)
+        => _preferredAurHelper = helper is "paru" or "yay" ? helper : string.Empty;
+
     public void SetQueryTimeout(int seconds)
         => _queryTimeoutMilliseconds = Math.Clamp(seconds, 5, 600) * 1000;
 
@@ -464,9 +470,11 @@ public sealed partial class PackageManager
         return ParseUpdateLines(run.Output);
     }
 
-    /// <summary>AUR helper: paru if available, otherwise yay; null when neither exists.</summary>
-    public static string? AurHelper()
+    /// <summary>Configured AUR helper, falling back to whichever one is installed.</summary>
+    private string? AurHelper()
     {
+        if (_preferredAurHelper.Length > 0 && CommandRunner.HasExecutable(_preferredAurHelper))
+            return _preferredAurHelper;
         if (CommandRunner.HasExecutable("paru"))
             return "paru";
         if (CommandRunner.HasExecutable("yay"))
@@ -696,7 +704,7 @@ public sealed partial class PackageManager
         OperationFinished?.Invoke(state.Ok, state.LastError);
     }
 
-    private static List<string>? BuildArguments(
+    private List<string>? BuildArguments(
         PackageOperation operation, Package package, string id, OperationState state)
     {
         switch (package.Backend)

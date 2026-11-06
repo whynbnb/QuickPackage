@@ -6,7 +6,8 @@ C# 14 and Avalonia.
 ## Features
 
 - **System packages**: pacman and AUR (via `paru`/`yay`) as separate
-  backends, plus Flatpak and cargo
+  backends, plus Flatpak and cargo; the AUR helper is selectable in
+  Preferences and only installed helpers can be chosen
 - **Developer tools** (optional, disabled by default): mise, rustup, fvm
 - A prominent **System packages / Developer packages** switch keeps the two
   worlds apart: each side has its own filter chips, counters and update flow
@@ -61,6 +62,6 @@ Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 `~/.config/quickpackagerc`):
 
 - `[General]` — language, theme, startup update check, query timeout, the
-  activity log's expanded state, height and detail visibility, and one
-  `Enable*` key per backend
+  AUR helper (`paru`/`yay`), the activity log's expanded state, height and
+  detail visibility, and one `Enable*` key per backend
 - `[Proxy]` — mode, host, port and one `Enable*` key per backend

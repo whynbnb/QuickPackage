@@ -35,6 +35,7 @@
         <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
 
         <GroupBox Header="{Binding BackendsGroup}">
+          <StackPanel>
           <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" RowSpacing="6" ColumnSpacing="8">
             <CheckBox Grid.Row="0" Grid.Column="0" Content="{Binding EnablePacmanText}"
                       IsChecked="{Binding EnablePacman, Mode=TwoWay}"/>
@@ -45,6 +46,15 @@
             <CheckBox Grid.Row="1" Grid.Column="1" Content="{Binding EnableCargoText}"
                       IsChecked="{Binding EnableCargo, Mode=TwoWay}"/>
           </Grid>
+          <Grid ColumnDefinitions="110,*" Margin="0,8,0,0">
+            <TextBlock Text="{Binding AurHelperLabel}" VerticalAlignment="Center"/>
+            <ComboBox Grid.Column="1" ItemsSource="{Binding AurHelpers}"
+                      SelectedItem="{Binding SelectedAurHelper, Mode=TwoWay}"
+                      HorizontalAlignment="Stretch"/>
+          </Grid>
+          <TextBlock Text="{Binding AurHelperHint}" IsVisible="{Binding !HasAurHelper}"
+                     FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,4,0,0"/>
+          </StackPanel>
         </GroupBox>
 
         <GroupBox Header="{Binding DevGroup}">

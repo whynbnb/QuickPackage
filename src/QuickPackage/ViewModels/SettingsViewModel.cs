@@ -44,6 +44,25 @@ public partial class SettingsViewModel : ObservableObject
             new OptionItem { Value = "1", Label = "HTTP" },
             new OptionItem { Value = "2", Label = "SOCKS5" },
         ];
+        AurHelpers =
+        [
+            new OptionItem
+            {
+                Value = "paru",
+                Label = "paru",
+                IsEnabled = CommandRunner.HasExecutable("paru"),
+            },
+            new OptionItem
+            {
+                Value = "yay",
+                Label = "yay",
+                IsEnabled = CommandRunner.HasExecutable("yay"),
+            },
+        ];
+        var savedHelper = config.GetString("General", "AurHelper");
+        SelectedAurHelper =
+            AurHelpers.FirstOrDefault(item => item.IsEnabled && item.Value == savedHelper)
+            ?? AurHelpers.FirstOrDefault(item => item.IsEnabled);
 
         _initialLanguage = config.GetString("General", "Language", "system");
         _initialTheme = config.GetString("General", "Theme", "system");
@@ -79,6 +98,8 @@ public partial class SettingsViewModel : ObservableObject
 
     public ObservableCollection<OptionItem> ProxyModes { get; }
 
+    public ObservableCollection<OptionItem> AurHelpers { get; }
+
     public string LanguageLabel => Loc.T("Language:");
     public string ThemeLabel => Loc.T("Theme:");
     public string StartupCheckText => Loc.T("Check for updates on startup");
@@ -94,6 +115,10 @@ public partial class SettingsViewModel : ObservableObject
     public string EnableFvmText => Loc.T("Enable fvm");
     public string OkText => Loc.T("OK");
     public string CancelText => Loc.T("Cancel");
+
+    public string AurHelperLabel => Loc.T("AUR helper:");
+    public string AurHelperHint => Loc.T("No AUR helper (paru or yay) found");
+    public bool HasAurHelper => AurHelpers.Any(item => item.IsEnabled);
 
     public string ProxyGroup => Loc.T("Proxy");
     public string ProxyModeLabel => Loc.T("Mode:");
@@ -141,6 +166,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _enableFvm;
+
+    [ObservableProperty]
+    private OptionItem? _selectedAurHelper;
 
     [ObservableProperty]
     private OptionItem? _selectedProxyMode;
@@ -246,6 +274,7 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "EnableMise", EnableMise);
         _config.Set("General", "EnableRustup", EnableRustup);
         _config.Set("General", "EnableFvm", EnableFvm);
+        _config.Set("General", "AurHelper", SelectedAurHelper?.Value ?? string.Empty);
 
         _proxy.Mode = (ProxyMode)int.Parse(SelectedProxyMode?.Value ?? "0");
         _proxy.Host = ProxyHost.Trim();

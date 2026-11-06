@@ -76,6 +76,7 @@ internal static class TranslationsZh
         ["Mode:"] = "模式:",
         ["New"] = "新版本",
         ["No AUR helper (paru or yay) found"] = "未找到 AUR 助手(需要 paru 或 yay)",
+        ["AUR helper:"] = "AUR 助手:",
         ["No matching packages"] = "没有匹配的软件包",
         ["No proxy"] = "不使用代理",
         ["OK"] = "确定",

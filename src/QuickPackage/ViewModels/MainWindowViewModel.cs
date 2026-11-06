@@ -1114,6 +1114,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         _manager.SetBackendEnabled(Backend.Pacman, _pacmanEnabled);
         _manager.SetBackendEnabled(Backend.Aur, _aurEnabled);
+        _manager.SetAurHelper(_config.GetString("General", "AurHelper"));
         _manager.SetBackendEnabled(Backend.Flatpak, _flatpakEnabled);
         _manager.SetBackendEnabled(Backend.Cargo, _cargoEnabled);
         _manager.SetBackendEnabled(Backend.Mise, _miseEnabled);
