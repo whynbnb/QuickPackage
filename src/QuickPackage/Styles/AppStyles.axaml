@@ -63,6 +63,15 @@
     <Setter Property="Padding" Value="8,1"/>
   </Style>
 
+  <!-- Repository / origin tag, outlined so it reads as metadata. -->
+  <Style Selector="Border.pill.tag">
+    <Setter Property="CornerRadius" Value="7"/>
+    <Setter Property="Padding" Value="7,0"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+  </Style>
+
   <Style Selector="Border.pane">
     <Setter Property="CornerRadius" Value="8"/>
     <Setter Property="BorderThickness" Value="1"/>

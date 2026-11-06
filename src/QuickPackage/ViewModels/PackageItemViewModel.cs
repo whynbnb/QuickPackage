@@ -28,14 +28,43 @@ public partial class PackageItemViewModel : ObservableObject
         ? Model.Version
         : $"{(Model.Version.Length == 0 ? "—" : Model.Version)} → {Model.NewVersion}";
 
-    /// <summary>"origin · id · description", with empty parts omitted.</summary>
+    public bool HasOrigin => Model.Origin.Length > 0;
+
+    public string OriginText => Model.Origin;
+
+    public IBrush OriginBackground
+    {
+        get
+        {
+            var (r, g, b) = OriginColor;
+            return Brush(r, g, b, 40);
+        }
+    }
+
+    public IBrush OriginBorderBrush
+    {
+        get
+        {
+            var (r, g, b) = OriginColor;
+            return Brush(r, g, b, 115);
+        }
+    }
+
+    public IBrush OriginForeground
+    {
+        get
+        {
+            var (r, g, b) = OriginColor;
+            return Brush(r, g, b, 255);
+        }
+    }
+
+    /// <summary>"id · description", with empty parts omitted.</summary>
     public string Subtitle
     {
         get
         {
-            var parts = new List<string>(3);
-            if (Model.Origin.Length > 0)
-                parts.Add(Model.Origin);
+            var parts = new List<string>(2);
             if (Model.PackageId.Length > 0 && Model.PackageId != Model.Name)
                 parts.Add(Model.PackageId);
             if (Model.Description.Length > 0)
@@ -58,35 +87,6 @@ public partial class PackageItemViewModel : ObservableObject
     }
 
     public IBrush TagForeground
-    {
-        get
-        {
-            var (r, g, b) = TagColor;
-            return Brush(r, g, b, 255);
-        }
-    }
-
-    public string IconGlyph => Model.Foreign ? "A" : Model.Backend switch
-    {
-        Backend.Pacman => "P",
-        Backend.Flatpak => "F",
-        Backend.Cargo => "C",
-        Backend.Mise => "M",
-        Backend.Rustup => "R",
-        Backend.Fvm => "V",
-        _ => "?",
-    };
-
-    public IBrush IconBackground
-    {
-        get
-        {
-            var (r, g, b) = TagColor;
-            return Brush(r, g, b, 42);
-        }
-    }
-
-    public IBrush IconForeground
     {
         get
         {
@@ -135,6 +135,53 @@ public partial class PackageItemViewModel : ObservableObject
         }
     }
 
+    private (byte R, byte G, byte B) OriginColor
+    {
+        get
+        {
+            if (Model.Foreign)
+                return ((byte)130, (byte)80, (byte)223);
+
+            var origin = Model.Origin.Trim();
+            if (origin.Length == 0)
+                return TagColor;
+
+            switch (origin.ToLowerInvariant())
+            {
+                case "core": return ((byte)214, (byte)86, (byte)73);
+                case "extra": return ((byte)56, (byte)121, (byte)216);
+                case "multilib": return ((byte)46, (byte)160, (byte)120);
+                case "community": return ((byte)72, (byte)160, (byte)92);
+                case "chaotic-aur": return ((byte)170, (byte)90, (byte)200);
+                case "flathub": return ((byte)64, (byte)160, (byte)140);
+                case "crates.io": return ((byte)207, (byte)90, (byte)33);
+            }
+
+            // Developer tool origins (e.g. FVM's "global") keep their
+            // backend's colour so the two tags still read as a pair.
+            if (Model.Backend != Backend.Pacman)
+                return TagColor;
+
+            // Unknown repository: pick a stable colour from the name.
+            var hash = 0;
+            foreach (var c in origin)
+                hash = unchecked(hash * 31 + c);
+            return OriginPalette[(hash & 0x7FFFFFFF) % OriginPalette.Length];
+        }
+    }
+
+    private static readonly (byte R, byte G, byte B)[] OriginPalette =
+    [
+        ((byte)56, (byte)121, (byte)216),
+        ((byte)214, (byte)86, (byte)73),
+        ((byte)46, (byte)160, (byte)120),
+        ((byte)170, (byte)90, (byte)200),
+        ((byte)214, (byte)132, (byte)40),
+        ((byte)56, (byte)150, (byte)190),
+        ((byte)190, (byte)80, (byte)130),
+        ((byte)120, (byte)140, (byte)60),
+    ];
+
     private (byte R, byte G, byte B) TagColor => Model.Foreign
         ? ((byte)130, (byte)80, (byte)223)
         : Model.Backend switch
@@ -163,14 +210,16 @@ public partial class PackageItemViewModel : ObservableObject
     public void Refresh()
     {
         OnPropertyChanged(nameof(VersionText));
+        OnPropertyChanged(nameof(HasOrigin));
+        OnPropertyChanged(nameof(OriginText));
+        OnPropertyChanged(nameof(OriginBackground));
+        OnPropertyChanged(nameof(OriginBorderBrush));
+        OnPropertyChanged(nameof(OriginForeground));
         OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(TagText));
         OnPropertyChanged(nameof(TagFontWeight));
         OnPropertyChanged(nameof(TagBackground));
         OnPropertyChanged(nameof(TagForeground));
-        OnPropertyChanged(nameof(IconGlyph));
-        OnPropertyChanged(nameof(IconBackground));
-        OnPropertyChanged(nameof(IconForeground));
         OnPropertyChanged(nameof(ShowBadge));
         OnPropertyChanged(nameof(BadgeText));
         OnPropertyChanged(nameof(BadgeBackground));
