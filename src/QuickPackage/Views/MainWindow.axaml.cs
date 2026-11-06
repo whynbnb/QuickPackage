@@ -147,4 +147,10 @@ public partial class MainWindow : Window, IDialogService
         var dialog = new SettingsWindow { DataContext = viewModel };
         return await dialog.ShowDialog<bool>(this);
     }
+
+    public async Task ShowSnapshotsAsync(SnapshotsViewModel viewModel)
+    {
+        var dialog = new SnapshotWindow { DataContext = viewModel };
+        await dialog.ShowDialog(this);
+    }
 }

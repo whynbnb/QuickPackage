@@ -75,6 +75,146 @@ public sealed partial class PackageManager
 
     // ---------------------------------------------------------------- queries
 
+    /// <summary>
+    /// Captures the installed packages using each backend's native export
+    /// command, falling back to the already-loaded package list when a
+    /// backend has no usable export command.
+    /// </summary>
+    public async Task<PackageSnapshot> CaptureSnapshotAsync(CancellationToken cancellationToken)
+    {
+        var loaded = await LoadPackagesAsync(cancellationToken).ConfigureAwait(false);
+        var entries = new List<SnapshotEntry>();
+
+        if (_enabled[Backend.Pacman])
+            await AddPacmanExportAsync(entries, Backend.Pacman, "-Qen", loaded, cancellationToken).ConfigureAwait(false);
+        if (_enabled[Backend.Aur])
+            await AddPacmanExportAsync(entries, Backend.Aur, "-Qem", loaded, cancellationToken).ConfigureAwait(false);
+        if (_enabled[Backend.Flatpak])
+            await AddFlatpakExportAsync(entries, loaded, cancellationToken).ConfigureAwait(false);
+        if (_enabled[Backend.Cargo])
+            await AddCargoExportAsync(entries, loaded, cancellationToken).ConfigureAwait(false);
+
+        // These backends only expose their installed set through the same
+        // listing commands the normal query already uses.
+        foreach (var backend in new[] { Backend.Mise, Backend.Rustup, Backend.Fvm })
+        {
+            if (_enabled[backend])
+                AddSnapshotFallback(entries, loaded, backend);
+        }
+
+        var packages = entries
+            .GroupBy(entry => (entry.Backend, entry.Name))
+            .Select(group => group.First())
+            .OrderBy(entry => entry.Backend)
+            .ThenBy(entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new PackageSnapshot { Packages = packages };
+    }
+
+    private async Task AddPacmanExportAsync(
+        List<SnapshotEntry> entries, Backend backend, string query,
+        List<Package> loaded, CancellationToken cancellationToken)
+    {
+        var run = await CommandRunner.RunAsync(
+            "pacman", [query], _queryTimeoutMilliseconds,
+            ProxyEnvironment(backend), cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+        {
+            AddSnapshotFallback(entries, loaded, backend);
+            return;
+        }
+
+        foreach (var rawLine in run.Output.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+            var space = line.IndexOf(' ');
+            entries.Add(new SnapshotEntry
+            {
+                Backend = backend,
+                Name = space < 0 ? line : line[..space],
+                Version = space < 0 ? string.Empty : line[(space + 1)..].Trim(),
+            });
+        }
+    }
+
+    private async Task AddFlatpakExportAsync(
+        List<SnapshotEntry> entries, List<Package> loaded, CancellationToken cancellationToken)
+    {
+        var run = await CommandRunner.RunAsync(
+            "flatpak", ["list", "--app", "--columns=application,version"],
+            _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+        {
+            AddSnapshotFallback(entries, loaded, Backend.Flatpak);
+            return;
+        }
+
+        foreach (var rawLine in run.Output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.Length == 0)
+                continue;
+            var columns = line.Split('\t');
+            if (columns.Length == 0 || columns[0].Length == 0)
+                continue;
+            entries.Add(new SnapshotEntry
+            {
+                Backend = Backend.Flatpak,
+                Name = columns[0],
+                Version = columns.Length > 1 ? columns[1] : string.Empty,
+            });
+        }
+    }
+
+    private async Task AddCargoExportAsync(
+        List<SnapshotEntry> entries, List<Package> loaded, CancellationToken cancellationToken)
+    {
+        var run = await CommandRunner.RunAsync(
+            "cargo", ["install", "--list"], _queryTimeoutMilliseconds,
+            ProxyEnvironment(Backend.Cargo), cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+        {
+            AddSnapshotFallback(entries, loaded, Backend.Cargo);
+            return;
+        }
+
+        foreach (var rawLine in run.Output.Split('\n'))
+        {
+            var match = CargoInstalledRegex().Match(rawLine.TrimEnd('\r'));
+            if (match.Success)
+            {
+                entries.Add(new SnapshotEntry
+                {
+                    Backend = Backend.Cargo,
+                    Name = match.Groups[1].Value,
+                    Version = match.Groups[2].Value,
+                });
+            }
+        }
+    }
+
+    private static void AddSnapshotFallback(
+        List<SnapshotEntry> entries, List<Package> loaded, Backend backend)
+    {
+        var explicitOnly = backend is Backend.Pacman or Backend.Aur;
+        foreach (var package in loaded)
+        {
+            if (package.Backend != backend)
+                continue;
+            if (explicitOnly && !package.Explicit)
+                continue;
+            entries.Add(new SnapshotEntry
+            {
+                Backend = backend,
+                Name = package.Name,
+                Version = package.Version,
+            });
+        }
+    }
+
     public async Task<List<Package>> LoadPackagesAsync(CancellationToken cancellationToken)
     {
         var tasks = new List<Task<List<Package>>>();
@@ -793,6 +933,9 @@ public sealed partial class PackageManager
 
     [GeneratedRegex(@"^([a-zA-Z0-9_.-]+)\s+v(\S+)\s+v(\S+)\s+Yes\b")]
     private static partial Regex CargoUpdateRegex();
+
+    [GeneratedRegex(@"^([a-zA-Z0-9_.+-]+)\s+v([^\s:]+)")]
+    private static partial Regex CargoInstalledRegex();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex WhitespaceRegex();

@@ -8,4 +8,6 @@ public interface IDialogService
     Task ShowInfoAsync(string title, string message);
 
     Task<bool> ShowSettingsAsync(SettingsViewModel viewModel);
+
+    Task ShowSnapshotsAsync(SnapshotsViewModel viewModel);
 }

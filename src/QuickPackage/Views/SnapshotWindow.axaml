@@ -1,0 +1,120 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.SnapshotWindow"
+        x:DataType="vm:SnapshotsViewModel"
+        Width="1100" Height="700"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20" RowSpacing="12">
+
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding Title}" Classes="h1"/>
+        <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12"/>
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+        <Button Content="{Binding CreateText}"
+                Command="{Binding CreateSnapshotCommand}"
+                IsEnabled="{Binding !IsBusy}"/>
+        <Button Classes="danger" Content="{Binding DeleteText}"
+                IsEnabled="{Binding CanDelete}"
+                Click="OnDelete"/>
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="300,*" ColumnSpacing="12">
+
+      <Border Classes="pane">
+        <Grid Margin="8">
+          <ListBox ItemsSource="{Binding Items}" BorderThickness="0" Background="Transparent">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:SnapshotListItemViewModel">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8" Margin="0,3">
+                  <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                            VerticalAlignment="Center"/>
+                  <StackPanel Grid.Column="1" Spacing="2">
+                    <TextBlock Text="{Binding TimeText}" FontWeight="SemiBold" FontSize="13"/>
+                    <TextBlock Text="{Binding DetailText}" Classes="subtle" FontSize="11"
+                               TextWrapping="Wrap"/>
+                  </StackPanel>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="{Binding HintText}" Classes="subtle" IsVisible="{Binding ShowEmptyList}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center"
+                     TextWrapping="Wrap" MaxWidth="220"/>
+        </Grid>
+      </Border>
+
+      <Border Grid.Column="1" Classes="pane">
+        <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8" Margin="10">
+
+          <TextBlock Grid.Row="0" Text="{Binding SummaryText}" FontWeight="SemiBold"/>
+
+          <Grid Grid.Row="1" ColumnDefinitions="240,*" IsVisible="{Binding ShowComparison}">
+            <TextBlock Text="{Binding PackageHeader}" Classes="subtle" FontSize="11"/>
+            <ItemsControl Grid.Column="1" ItemsSource="{Binding Columns}">
+              <ItemsControl.ItemsPanel>
+                <ItemsPanelTemplate>
+                  <StackPanel Orientation="Horizontal"/>
+                </ItemsPanelTemplate>
+              </ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate x:DataType="vm:SnapshotColumnViewModel">
+                  <Border Width="120">
+                    <TextBlock Text="{Binding Label}" Classes="subtle" FontSize="11"
+                               TextTrimming="CharacterEllipsis"/>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+
+          <Grid Grid.Row="2">
+            <ListBox ItemsSource="{Binding Rows}" BorderThickness="0" Background="Transparent"
+                     IsVisible="{Binding ShowComparison}">
+              <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:SnapshotRowViewModel">
+                  <Grid ColumnDefinitions="240,*">
+                    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding Name}" Foreground="{Binding NameForeground}"
+                                 FontSize="13" TextTrimming="CharacterEllipsis" MaxWidth="176"/>
+                      <TextBlock Text="{Binding BackendLabel}" Classes="subtle" FontSize="11"
+                                 VerticalAlignment="Center"/>
+                    </StackPanel>
+                    <ItemsControl Grid.Column="1" ItemsSource="{Binding Cells}">
+                      <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                          <StackPanel Orientation="Horizontal"/>
+                        </ItemsPanelTemplate>
+                      </ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SnapshotCellViewModel">
+                          <Border Width="120">
+                            <TextBlock Text="{Binding Text}" Foreground="{Binding Foreground}"
+                                       FontWeight="{Binding FontWeight}" FontSize="12"
+                                       TextTrimming="CharacterEllipsis"/>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Grid>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <TextBlock Text="{Binding HintText}" Classes="subtle"
+                       IsVisible="{Binding !ShowComparison}"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420"/>
+          </Grid>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <TextBlock Grid.Row="2" Classes="subtle" FontSize="11" TextWrapping="Wrap"
+               Text="{Binding LegendText}"/>
+  </Grid>
+</Window>

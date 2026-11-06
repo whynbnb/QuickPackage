@@ -1045,6 +1045,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task SnapshotsAsync()
+    {
+        var viewModel = new SnapshotsViewModel(_manager);
+        await _dialogs.ShowSnapshotsAsync(viewModel);
+    }
+
+    [RelayCommand]
     private async Task AboutAsync()
     {
         var assembly = typeof(MainWindowViewModel).Assembly;

@@ -14,6 +14,10 @@ C# 14 and Avalonia.
 - Update detection per backend with available versions
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
+- **Package snapshots** using each backend's native export where available
+  (pacman/AUR explicit lists, Flatpak refs, cargo's install list) with a
+  fallback to the normal listing; any two or more snapshots can be compared
+  side by side, with added / removed / version-changed packages highlighted
 - Per-package install/uninstall in the detail pane, plus a bulk update
   action while the update filter is active
 - Native **Wayland** windowing when the compositor is available, with an
@@ -70,3 +74,6 @@ Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
   AUR helper (`paru`/`yay`), the activity log's expanded state, height and
   detail visibility, and one `Enable*` key per backend
 - `[Proxy]` — mode, host, port and one `Enable*` key per backend
+
+Snapshots are stored next to it in
+`$XDG_CONFIG_HOME/quickpackage-snapshots.json`.

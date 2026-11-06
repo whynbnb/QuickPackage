@@ -27,6 +27,8 @@
         <MenuItem Header="{Binding L.RefreshLists}" InputGesture="F5" Command="{Binding RefreshCommand}"/>
         <MenuItem Header="{Binding L.CheckForUpdates}" InputGesture="Ctrl+U" Command="{Binding CheckUpdatesCommand}"/>
         <Separator/>
+        <MenuItem Header="{Binding L.Snapshots}" Command="{Binding SnapshotsCommand}"/>
+        <Separator/>
         <MenuItem Header="{Binding UpdatesChipText}" ToggleType="CheckBox"
                   IsChecked="{Binding ShowUpdatesOnly, Mode=TwoWay}"
                   IsEnabled="{Binding HasUpdates}"/>
@@ -55,6 +57,8 @@
       <Button Grid.Column="2" Classes="toolbar" Content="{Binding L.Refresh}"
               Command="{Binding RefreshCommand}" IsEnabled="{Binding IsNotBusy}"/>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
+        <Button Classes="toolbar" Content="{Binding L.Snapshots}"
+                Command="{Binding SnapshotsCommand}"/>
         <Button Classes="toolbar" Content="{Binding RemoveSelectedText}"
                 Command="{Binding RemoveSelectedOrphansCommand}"
                 IsVisible="{Binding ShowOrphansOnly}"
