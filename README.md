@@ -12,7 +12,10 @@ C# 14 and Avalonia.
 - A prominent **System packages / Developer packages** switch keeps the two
   worlds apart: each side has its own filter chips, counters and update flow
 - Update detection per backend with available versions
-- Install / remove / update selected packages, with a master-detail pane
+- Per-package install/uninstall in the detail pane, plus a bulk update
+  action while the update filter is active
+- Native **Wayland** windowing when the compositor is available, with an
+  automatic X11/XWayland fallback otherwise
 - Stop a running refresh/update/operation with the footer button or `Esc`,
   and a configurable timeout for read-only queries
 - A collapsible, resizable **activity log** at the bottom shows the commands
@@ -28,7 +31,7 @@ C# 14 and Avalonia.
 ## Requirements
 
 - .NET SDK 10 (C# 14)
-- Linux desktop; the package backends are Arch-specific
+- Linux desktop with Wayland or X11; the package backends are Arch-specific
 
 ## Project layout
 

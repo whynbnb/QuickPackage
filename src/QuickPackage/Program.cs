@@ -25,7 +25,13 @@ internal static class Program
 
     public static AppBuilder BuildAvaloniaApp()
         => AppBuilder.Configure<App>()
+            // Keep the Wayland app id in sync with the installed desktop entry
+            // so compositors can associate the window with its icon/metadata.
+            .With(new WaylandPlatformOptions { AppId = "org.quickpackage.QuickPackage" })
             .UsePlatformDetect()
+            // Prefer the native Wayland backend when a compositor is reachable
+            // and fall back to the X11 backend otherwise (including XWayland).
+            .UseWaylandWithFallback()
             .With(FontStrategy.CreateOptions())
             .LogToTrace();
 }
