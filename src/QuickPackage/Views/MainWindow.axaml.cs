@@ -147,10 +147,4 @@ public partial class MainWindow : Window, IDialogService
         var dialog = new SettingsWindow { DataContext = viewModel };
         return await dialog.ShowDialog<bool>(this);
     }
-
-    public async Task<List<Package>?> ShowUpdatesAsync(UpdateViewModel viewModel)
-    {
-        var dialog = new UpdateWindow { DataContext = viewModel };
-        return await dialog.ShowDialog<List<Package>?>(this);
-    }
 }

@@ -123,7 +123,7 @@ public partial class MainWindowViewModel : ObservableObject
     private string _updatesChipText = string.Empty;
 
     [ObservableProperty]
-    private string _updatesButtonText = string.Empty;
+    private string _updateSelectedText = string.Empty;
 
     [ObservableProperty]
     private bool _hasUpdates;
@@ -176,7 +176,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool ShowLogContext => IsLogDetailed && LogContext is not null;
 
-    public bool CanInstallRemove => HasSelection && !IsBusy;
+    public bool CanBulkUpdate => HasSelection && !IsBusy;
 
     public bool HasDevBackends => _miseEnabled || _rustupEnabled || _fvmEnabled;
 
@@ -221,15 +221,21 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
-    partial void OnShowUpdatesOnlyChanged(bool value) => ApplyFilter();
+    partial void OnShowUpdatesOnlyChanged(bool value)
+    {
+        // Updatable rows get a checkbox (checked by default) only while the
+        // update filter is active, so the bulk update acts on what is shown.
+        SyncUpdateSelection(value);
+        ApplyFilter();
+    }
 
     partial void OnIsBusyChanged(bool value)
     {
         OnPropertyChanged(nameof(IsNotBusy));
-        OnPropertyChanged(nameof(CanInstallRemove));
+        OnPropertyChanged(nameof(CanBulkUpdate));
     }
 
-    partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanInstallRemove));
+    partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanBulkUpdate));
 
     partial void OnSelectedPackageChanged(PackageItemViewModel? value) => RebuildDetail(value);
 
@@ -383,6 +389,20 @@ public partial class MainWindowViewModel : ObservableObject
 
     // --------------------------------------------------------------- filtering
 
+    /// <summary>
+    /// Shows checkboxes only on rows the update filter can act on and checks
+    /// them all; turning the filter off clears the selection again.
+    /// </summary>
+    private void SyncUpdateSelection(bool active)
+    {
+        foreach (var item in _all)
+        {
+            var selectable = active && item.Model.Status == PackageStatus.NeedsUpdate;
+            item.ShowSelection = selectable;
+            item.IsSelected = selectable;
+        }
+    }
+
     private void ApplyFilter()
     {
         var filtered = new List<PackageItemViewModel>(_all.Count);
@@ -490,7 +510,7 @@ public partial class MainWindowViewModel : ObservableObject
         SetChipLabel(ChipKind.Fvm, ChipText(Loc.T("FVM"), fvm, CountUpdates(Backend.Fvm)));
 
         UpdatesChipText = Loc.T("Updates (%1)", totalUpdates);
-        UpdatesButtonText = Loc.T("Update List");
+        UpdateSelectedText = Loc.T("Update Selected (%1)", selected);
         HasUpdates = totalUpdates > 0;
         if (!HasUpdates && ShowUpdatesOnly)
             ShowUpdatesOnly = false;
@@ -563,6 +583,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (_updatesLoaded)
                 ApplyUpdatesToModels();
             ApplyFilter();
+            SyncUpdateSelection(ShowUpdatesOnly);
             UpdateCounters();
             StatusMessage = Loc.T("Loaded %1 packages", packages.Count);
         }
@@ -600,6 +621,7 @@ public partial class MainWindowViewModel : ObservableObject
             _updatesLoaded = true;
             ApplyUpdatesToModels();
             ApplyFilter();
+            SyncUpdateSelection(ShowUpdatesOnly);
             UpdateCounters();
             StatusMessage = HasUpdates
                 ? Loc.T("%1 updates available", CountAllUpdates())
@@ -711,51 +733,23 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
-    private async Task InstallSelectedAsync()
+    private async Task UpdateSelectedAsync()
     {
-        var packages = _all.Where(item => item.Model.Selected).Select(item => item.Model).ToList();
+        var packages = _all
+            .Where(item => item.Model.Selected && item.Model.Status == PackageStatus.NeedsUpdate)
+            .Select(item => item.Model)
+            .ToList();
         if (packages.Count == 0)
             return;
         var names = string.Join(", ", packages.Select(package => package.Name));
         var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Install Packages"),
-            Loc.Tn("Install the following package?", "Install the following %1 packages?",
+            Loc.T("Update Packages"),
+            Loc.Tn("Update the following package?", "Update the following %1 packages?",
                 packages.Count, packages.Count) + "\n\n" + names,
             Loc.T("OK"), Loc.T("Cancel"));
         if (!confirmed)
             return;
-        await RunOperationAsync(PackageOperation.Install, packages);
-    }
-
-    [RelayCommand]
-    private async Task RemoveSelectedAsync()
-    {
-        var packages = _all.Where(item => item.Model.Selected).Select(item => item.Model).ToList();
-        if (packages.Count == 0)
-            return;
-        var names = string.Join(", ", packages.Select(package => package.Name));
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Remove Packages"),
-            Loc.Tn("Remove the following package?", "Remove the following %1 packages?",
-                packages.Count, packages.Count) + "\n\n" + names,
-            Loc.T("OK"), Loc.T("Cancel"));
-        if (!confirmed)
-            return;
-        await RunOperationAsync(PackageOperation.Remove, packages);
-    }
-
-    [RelayCommand]
-    private async Task ShowUpdatesAsync()
-    {
-        var updates = _all.Where(item => item.Model.Status == PackageStatus.NeedsUpdate)
-            .Select(item => item.Model).ToList();
-        if (updates.Count == 0)
-            return;
-        var viewModel = new UpdateViewModel(updates);
-        var selected = await _dialogs.ShowUpdatesAsync(viewModel);
-        if (selected is null || selected.Count == 0)
-            return;
-        await RunOperationAsync(PackageOperation.Update, selected);
+        await RunOperationAsync(PackageOperation.Update, packages);
     }
 
     [RelayCommand]

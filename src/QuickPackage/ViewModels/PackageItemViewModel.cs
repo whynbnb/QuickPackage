@@ -20,6 +20,10 @@ public partial class PackageItemViewModel : ObservableObject
     [ObservableProperty]
     private bool _isSelected;
 
+    /// <summary>Checkboxes only appear while the list is filtered to updates.</summary>
+    [ObservableProperty]
+    private bool _showSelection;
+
     partial void OnIsSelectedChanged(bool value) => Model.Selected = value;
 
     public string Name => Model.Name;

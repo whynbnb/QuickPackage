@@ -11,8 +11,6 @@
   <Window.KeyBindings>
     <KeyBinding Gesture="F5" Command="{Binding RefreshCommand}"/>
     <KeyBinding Gesture="Ctrl+U" Command="{Binding CheckUpdatesCommand}"/>
-    <KeyBinding Gesture="Ctrl+I" Command="{Binding InstallSelectedCommand}"/>
-    <KeyBinding Gesture="Delete" Command="{Binding RemoveSelectedCommand}"/>
     <KeyBinding Gesture="Ctrl+Shift+OemComma" Command="{Binding SettingsCommand}"/>
     <KeyBinding Gesture="Escape" Command="{Binding StopCommand}"/>
     <KeyBinding Gesture="Ctrl+Q" Command="{Binding QuitCommand}"/>
@@ -29,10 +27,9 @@
         <MenuItem Header="{Binding L.RefreshLists}" InputGesture="F5" Command="{Binding RefreshCommand}"/>
         <MenuItem Header="{Binding L.CheckForUpdates}" InputGesture="Ctrl+U" Command="{Binding CheckUpdatesCommand}"/>
         <Separator/>
-        <MenuItem Header="{Binding L.InstallSelected}" InputGesture="Ctrl+I" Command="{Binding InstallSelectedCommand}"/>
-        <MenuItem Header="{Binding L.RemoveSelected}" InputGesture="Delete" Command="{Binding RemoveSelectedCommand}"/>
-        <Separator/>
-        <MenuItem Header="{Binding UpdatesChipText}" Command="{Binding ShowUpdatesCommand}" IsEnabled="{Binding HasUpdates}"/>
+        <MenuItem Header="{Binding UpdatesChipText}" ToggleType="CheckBox"
+                  IsChecked="{Binding ShowUpdatesOnly, Mode=TwoWay}"
+                  IsEnabled="{Binding HasUpdates}"/>
       </MenuItem>
       <MenuItem Header="{Binding L.Settings}">
         <MenuItem Header="{Binding L.Preferences}" InputGesture="Ctrl+Shift+OemComma" Command="{Binding SettingsCommand}"/>
@@ -57,8 +54,10 @@
 
       <Button Grid.Column="2" Classes="toolbar" Content="{Binding L.Refresh}"
               Command="{Binding RefreshCommand}" IsEnabled="{Binding IsNotBusy}"/>
-      <Button Grid.Column="3" Classes="toolbar" Content="{Binding UpdatesButtonText}"
-              Command="{Binding ShowUpdatesCommand}" IsEnabled="{Binding HasUpdates}"/>
+      <Button Grid.Column="3" Classes="toolbar" Content="{Binding UpdateSelectedText}"
+              Command="{Binding UpdateSelectedCommand}"
+              IsVisible="{Binding ShowUpdatesOnly}"
+              IsEnabled="{Binding CanBulkUpdate}"/>
     </Grid>
 
     <!-- Filter chips -->
@@ -100,6 +99,7 @@
                 <Border Classes="card">
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}"
+                              IsVisible="{Binding ShowSelection}"
                               VerticalAlignment="Center" Margin="0,0,10,0"/>
 
                     <StackPanel Grid.Column="1" Margin="0,0,10,0" Spacing="2" VerticalAlignment="Center">

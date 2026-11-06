@@ -8,7 +8,4 @@ public interface IDialogService
     Task ShowInfoAsync(string title, string message);
 
     Task<bool> ShowSettingsAsync(SettingsViewModel viewModel);
-
-    /// <summary>Returns the packages checked for update, or null when cancelled.</summary>
-    Task<List<Core.Package>?> ShowUpdatesAsync(UpdateViewModel viewModel);
 }
