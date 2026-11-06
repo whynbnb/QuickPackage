@@ -153,4 +153,10 @@ public partial class MainWindow : Window, IDialogService
         var dialog = new SnapshotWindow { DataContext = viewModel };
         await dialog.ShowDialog(this);
     }
+
+    public async Task ShowCacheCleanupAsync(CacheViewModel viewModel)
+    {
+        var dialog = new CacheWindow { DataContext = viewModel };
+        await dialog.ShowDialog(this);
+    }
 }

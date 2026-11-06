@@ -1,0 +1,145 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.CacheWindow"
+        x:DataType="vm:CacheViewModel"
+        Width="820" Height="720"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20" RowSpacing="12">
+
+    <StackPanel Grid.Row="0" Spacing="2">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12"/>
+    </StackPanel>
+
+    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="12">
+
+        <Border Classes="pane" Padding="14">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <TextBlock Text="{Binding PacmanSection}" FontWeight="SemiBold" FontSize="14"
+                         VerticalAlignment="Center"/>
+              <TextBlock Grid.Column="1" Text="{Binding PacmanSize}" FontWeight="SemiBold"
+                         FontSize="18" VerticalAlignment="Center"/>
+            </Grid>
+            <TextBlock Text="{Binding PacmanPath}" Classes="subtle" FontSize="11"/>
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button Classes="toolbar" Content="{Binding CleanUninstalledText}"
+                      Click="OnCleanUninstalled" IsEnabled="{Binding !IsBusy}"/>
+              <Button Classes="toolbar" Content="{Binding KeepLatestText}"
+                      Click="OnKeepLatest" IsVisible="{Binding HasPaccache}"
+                      IsEnabled="{Binding !IsBusy}"/>
+              <Button Classes="toolbar danger" Content="{Binding CleanAllText}"
+                      Click="OnCleanAll" IsEnabled="{Binding !IsBusy}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding PaccacheHint}" Classes="subtle" FontSize="11"
+                       TextWrapping="Wrap"/>
+
+            <Expander Margin="0,4,0,0" IsExpanded="True"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Expander.Header>
+                <TextBlock Text="{Binding PacmanContentsHeader}" FontSize="12"/>
+              </Expander.Header>
+              <Grid RowDefinitions="Auto,Auto,*" RowSpacing="6" Height="250" Margin="0,6,0,0">
+                <TextBox Text="{Binding PacmanSearchText, Mode=TwoWay}"
+                         PlaceholderText="{Binding FilterPlaceholder}"/>
+                <Grid Grid.Row="1" ColumnDefinitions="*,90,90" ColumnSpacing="8">
+                  <TextBlock Text="{Binding PackageVersionHeader}" Classes="subtle" FontSize="11"/>
+                  <TextBlock Grid.Column="1" Text="{Binding SizeHeader}" Classes="subtle" FontSize="11"/>
+                  <TextBlock Grid.Column="2" Text="{Binding StatusHeader}" Classes="subtle" FontSize="11"/>
+                </Grid>
+                <ListBox Grid.Row="2" ItemsSource="{Binding PacmanEntries}" BorderThickness="0"
+                         Background="Transparent"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         IsVisible="{Binding HasPacmanEntries}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CacheEntryViewModel">
+                      <Grid ColumnDefinitions="*,90,90" ColumnSpacing="8" Margin="0,1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                          <TextBlock Text="{Binding Name}" FontSize="12"
+                                     TextTrimming="CharacterEllipsis" MaxWidth="360"/>
+                          <TextBlock Text="{Binding Version}" Classes="subtle" FontSize="11"
+                                     VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding Size}" Classes="subtle"
+                                   FontSize="11" VerticalAlignment="Center"/>
+                        <TextBlock Grid.Column="2" Text="{Binding Status}"
+                                   Foreground="{Binding StatusForeground}" FontSize="11"
+                                   VerticalAlignment="Center"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Grid.Row="2" Text="{Binding NoPacmanEntriesText}" Classes="subtle"
+                           IsVisible="{Binding !HasPacmanEntries}" FontSize="12"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Grid>
+            </Expander>
+          </StackPanel>
+        </Border>
+
+        <Border Classes="pane" Padding="14">
+          <StackPanel Spacing="8">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                <TextBlock Text="{Binding AurSection}" FontWeight="SemiBold" FontSize="14"/>
+                <TextBlock Text="{Binding AurHelper}" Classes="subtle" FontSize="12"
+                           VerticalAlignment="Center" IsVisible="{Binding HasAurHelper}"/>
+              </StackPanel>
+              <TextBlock Grid.Column="1" Text="{Binding AurSize}" FontWeight="SemiBold"
+                         FontSize="18" VerticalAlignment="Center"
+                         IsVisible="{Binding HasAurHelper}"/>
+            </Grid>
+            <TextBlock Text="{Binding AurPath}" Classes="subtle" FontSize="11"
+                       IsVisible="{Binding HasAurHelper}"/>
+            <StackPanel Orientation="Horizontal" Spacing="8" IsVisible="{Binding HasAurHelper}">
+              <Button Classes="toolbar" Content="{Binding CleanAurText}"
+                      Click="OnCleanAur" IsEnabled="{Binding !IsBusy}"/>
+              <Button Classes="toolbar danger" Content="{Binding CleanAllText}"
+                      Click="OnCleanAurAll" IsEnabled="{Binding !IsBusy}"/>
+            </StackPanel>
+            <TextBlock Text="{Binding AurHint}" Classes="subtle" FontSize="11"
+                       TextWrapping="Wrap" IsVisible="{Binding HasAurHelper}"/>
+            <TextBlock Text="{Binding NoAurHelperText}" Classes="subtle" FontSize="12"
+                       IsVisible="{Binding !HasAurHelper}"/>
+
+            <Expander Margin="0,4,0,0" IsVisible="{Binding HasAurHelper}" IsExpanded="True"
+                      HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+              <Expander.Header>
+                <TextBlock Text="{Binding AurContentsHeader}" FontSize="12"/>
+              </Expander.Header>
+              <Grid RowDefinitions="*,Auto" Height="180" Margin="0,6,0,0">
+                <ListBox ItemsSource="{Binding AurEntries}" BorderThickness="0"
+                         Background="Transparent"
+                         ScrollViewer.VerticalScrollBarVisibility="Auto"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                         IsVisible="{Binding HasAurEntries}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:CacheEntryViewModel">
+                      <TextBlock Text="{Binding Name}" FontSize="12" Margin="0,1"/>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <TextBlock Text="{Binding NoAurEntriesText}" Classes="subtle"
+                           IsVisible="{Binding !HasAurEntries}" FontSize="12"
+                           HorizontalAlignment="Center" VerticalAlignment="Center"/>
+              </Grid>
+            </Expander>
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+      <TextBlock Text="{Binding StatusMessage}" Classes="subtle" FontSize="11"
+                 VerticalAlignment="Center" TextWrapping="Wrap"/>
+      <Button Grid.Column="1" Classes="toolbar" Content="{Binding RefreshText}"
+              Click="OnRefresh" IsEnabled="{Binding !IsBusy}"/>
+      <Button Grid.Column="2" Classes="toolbar" Content="{Binding CloseText}"
+              Click="OnClose"/>
+    </Grid>
+  </Grid>
+</Window>

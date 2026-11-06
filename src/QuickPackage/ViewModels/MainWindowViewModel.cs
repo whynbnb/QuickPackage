@@ -1052,6 +1052,13 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task CacheCleanupAsync()
+    {
+        var viewModel = new CacheViewModel(_manager);
+        await _dialogs.ShowCacheCleanupAsync(viewModel);
+    }
+
+    [RelayCommand]
     private async Task AboutAsync()
     {
         var assembly = typeof(MainWindowViewModel).Assembly;

@@ -14,6 +14,10 @@ C# 14 and Avalonia.
 - Update detection per backend with available versions
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
+- **Cache cleanup** for pacman and the AUR helper: shows both cache sizes
+  and contents (versions, sizes, installed/old status, cached AUR sources),
+  and uses paccache (falling back to `pacman -Sc`), plus the helper's native
+  `-Sc` / `-Scc` flags
 - **Package snapshots** using each backend's native export where available
   (pacman/AUR installed lists, Flatpak refs, cargo's install list) with a
   fallback to the normal listing; every entry keeps its backend, repository,

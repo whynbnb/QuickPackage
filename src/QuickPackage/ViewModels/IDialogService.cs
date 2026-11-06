@@ -10,4 +10,6 @@ public interface IDialogService
     Task<bool> ShowSettingsAsync(SettingsViewModel viewModel);
 
     Task ShowSnapshotsAsync(SnapshotsViewModel viewModel);
+
+    Task ShowCacheCleanupAsync(CacheViewModel viewModel);
 }

@@ -28,6 +28,7 @@
         <MenuItem Header="{Binding L.CheckForUpdates}" InputGesture="Ctrl+U" Command="{Binding CheckUpdatesCommand}"/>
         <Separator/>
         <MenuItem Header="{Binding L.Snapshots}" Command="{Binding SnapshotsCommand}"/>
+        <MenuItem Header="{Binding L.CacheCleanup}" Command="{Binding CacheCleanupCommand}"/>
         <Separator/>
         <MenuItem Header="{Binding UpdatesChipText}" ToggleType="CheckBox"
                   IsChecked="{Binding ShowUpdatesOnly, Mode=TwoWay}"
@@ -59,6 +60,8 @@
       <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
         <Button Classes="toolbar" Content="{Binding L.Snapshots}"
                 Command="{Binding SnapshotsCommand}"/>
+        <Button Classes="toolbar" Content="{Binding L.CacheCleanup}"
+                Command="{Binding CacheCleanupCommand}"/>
         <Button Classes="toolbar" Content="{Binding RemoveSelectedText}"
                 Command="{Binding RemoveSelectedOrphansCommand}"
                 IsVisible="{Binding ShowOrphansOnly}"

@@ -75,6 +75,134 @@ public sealed partial class PackageManager
 
     // ---------------------------------------------------------------- queries
 
+    public enum CacheCleanMode
+    {
+        Uninstalled,
+        KeepLatest,
+        All,
+    }
+
+    public sealed record CacheUsage(
+        string PacmanPath,
+        string PacmanSize,
+        string AurHelper,
+        string AurPath,
+        string AurSize,
+        bool HasPaccache);
+
+    /// <summary>Sizes of the pacman package cache and the AUR helper cache.</summary>
+    public async Task<CacheUsage> GetCacheUsageAsync(CancellationToken cancellationToken)
+    {
+        const string pacmanCache = "/var/cache/pacman/pkg";
+        var helper = AurHelper() ?? string.Empty;
+        var aurPath = helper switch
+        {
+            "paru" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache/paru"),
+            "yay" => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cache/yay"),
+            _ => string.Empty,
+        };
+
+        var pacmanSize = await DirectorySizeAsync(pacmanCache, cancellationToken).ConfigureAwait(false);
+        var aurSize = aurPath.Length == 0
+            ? string.Empty
+            : await DirectorySizeAsync(aurPath, cancellationToken).ConfigureAwait(false);
+
+        return new CacheUsage(
+            pacmanCache,
+            pacmanSize,
+            helper,
+            aurPath,
+            aurSize,
+            CommandRunner.HasExecutable("paccache"));
+    }
+
+    /// <summary>
+    /// Removes cached pacman packages. Prefers paccache (pacman-contrib) and
+    /// falls back to pacman -Sc when it is not installed.
+    /// </summary>
+    public async Task<CommandRunner.Result> CleanPacmanCacheAsync(
+        CacheCleanMode mode, CancellationToken cancellationToken)
+    {
+        string executable;
+        List<string> arguments;
+        if (mode == CacheCleanMode.KeepLatest && CommandRunner.HasExecutable("paccache"))
+        {
+            executable = "sudo";
+            arguments = ["paccache", "-rk1"];
+        }
+        else if (mode == CacheCleanMode.All)
+        {
+            executable = "sudo";
+            arguments = ["pacman", "-Scc", "--noconfirm"];
+        }
+        else if (CommandRunner.HasExecutable("paccache"))
+        {
+            executable = "sudo";
+            arguments = ["paccache", "-ruk0"];
+        }
+        else
+        {
+            executable = "sudo";
+            arguments = ["pacman", "-Sc", "--noconfirm"];
+        }
+
+        Report(Loc.T("Cleaning pacman cache…"));
+        var run = await CommandRunner.RunAsync(
+            executable, arguments, 3_600_000, null, cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Cache cleaned") : Loc.T("Failed: %1", "pacman cache"));
+        return run;
+    }
+
+    /// <summary>Cleans the AUR helper cache using its native -Sc/-Scc flags.</summary>
+    public async Task<CommandRunner.Result> CleanAurCacheAsync(
+        bool all, CancellationToken cancellationToken)
+    {
+        var helper = AurHelper();
+        if (helper is null)
+            return new CommandRunner.Result(false, Loc.T("No AUR helper (paru or yay) found"));
+
+        Report(Loc.T("Cleaning the AUR helper cache…"));
+        var run = await CommandRunner.RunAsync(
+            helper, [all ? "-Scc" : "-Sc", "--noconfirm"], 3_600_000,
+            ProxyEnvironment(Backend.Aur), cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Cache cleaned") : Loc.T("Failed: %1", "AUR cache"));
+        return run;
+    }
+
+    /// <summary>Currently installed pacman package versions (repo + foreign).</summary>
+    public async Task<Dictionary<string, string>> GetInstalledVersionsAsync(CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
+        var run = await CommandRunner.RunAsync(
+            "pacman", ["-Q"], _queryTimeoutMilliseconds, environment, cancellationToken).ConfigureAwait(false);
+        foreach (var rawLine in run.Output.Split('\n'))
+        {
+            var line = rawLine.Trim();
+            if (line.Length == 0)
+                continue;
+            var space = line.IndexOf(' ');
+            if (space <= 0)
+                continue;
+            result[line[..space]] = line[(space + 1)..].Trim();
+        }
+        return result;
+    }
+
+    private static async Task<string> DirectorySizeAsync(string path, CancellationToken cancellationToken)
+    {
+        if (!Directory.Exists(path))
+            return Loc.T("Not present");
+
+        // "du" is far faster than walking a 20+ GiB cache from managed code.
+        var run = await CommandRunner.RunAsync(
+            "sh", ["-c", $"du -sh -- {path} 2>/dev/null"], 120_000, null, cancellationToken)
+            .ConfigureAwait(false);
+        var line = run.Output.Trim().Split('\n').LastOrDefault()?.Trim() ?? string.Empty;
+        var separator = line.IndexOf('\t');
+        return separator > 0 ? line[..separator] : (line.Length == 0 ? "—" : line);
+    }
+
     /// <summary>
     /// Captures the installed packages using each backend's native export
     /// command, falling back to the already-loaded package list when a
