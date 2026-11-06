@@ -54,6 +54,12 @@ public sealed class Package
     /// <summary>Foreign (AUR/local) pacman package: installed but absent from the sync repos.</summary>
     public bool Foreign { get; set; }
 
+    /// <summary>Pacman install reason: true for an explicitly installed package.</summary>
+    public bool Explicit { get; set; }
+
+    /// <summary>Installed as a dependency but no longer required by anything.</summary>
+    public bool Orphan { get; set; }
+
     public string EffectiveId => string.IsNullOrEmpty(PackageId) ? Name : PackageId;
 }
 

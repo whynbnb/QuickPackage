@@ -12,6 +12,8 @@ C# 14 and Avalonia.
 - A prominent **System packages / Developer packages** switch keeps the two
   worlds apart: each side has its own filter chips, counters and update flow
 - Update detection per backend with available versions
+- Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
+  install-reason tags and one-click promotion to explicitly installed
 - Per-package install/uninstall in the detail pane, plus a bulk update
   action while the update filter is active
 - Native **Wayland** windowing when the compositor is available, with an

@@ -108,6 +108,9 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _showUpdatesOnly;
 
     [ObservableProperty]
+    private bool _showOrphansOnly;
+
+    [ObservableProperty]
     private PackageItemViewModel? _selectedPackage;
 
     [ObservableProperty]
@@ -124,6 +127,15 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private string _updateSelectedText = string.Empty;
+
+    [ObservableProperty]
+    private string _removeSelectedText = string.Empty;
+
+    [ObservableProperty]
+    private string _orphansChipText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasOrphans;
 
     [ObservableProperty]
     private bool _hasUpdates;
@@ -148,6 +160,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _canUninstallSelectedPackage;
+
+    [ObservableProperty]
+    private bool _canMakeExplicit;
 
     [ObservableProperty]
     private bool _isInstalledSelectedPackage;
@@ -223,9 +238,17 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnShowUpdatesOnlyChanged(bool value)
     {
-        // Updatable rows get a checkbox (checked by default) only while the
-        // update filter is active, so the bulk update acts on what is shown.
-        SyncUpdateSelection(value);
+        if (value && ShowOrphansOnly)
+            ShowOrphansOnly = false;
+        SyncFilterSelection();
+        ApplyFilter();
+    }
+
+    partial void OnShowOrphansOnlyChanged(bool value)
+    {
+        if (value && ShowUpdatesOnly)
+            ShowUpdatesOnly = false;
+        SyncFilterSelection();
         ApplyFilter();
     }
 
@@ -390,14 +413,15 @@ public partial class MainWindowViewModel : ObservableObject
     // --------------------------------------------------------------- filtering
 
     /// <summary>
-    /// Shows checkboxes only on rows the update filter can act on and checks
+    /// Shows checkboxes only on rows the active filter can act on and checks
     /// them all; turning the filter off clears the selection again.
     /// </summary>
-    private void SyncUpdateSelection(bool active)
+    private void SyncFilterSelection()
     {
         foreach (var item in _all)
         {
-            var selectable = active && item.Model.Status == PackageStatus.NeedsUpdate;
+            var selectable = (ShowUpdatesOnly && item.Model.Status == PackageStatus.NeedsUpdate)
+                || (ShowOrphansOnly && item.Model.Orphan);
             item.ShowSelection = selectable;
             item.IsSelected = selectable;
         }
@@ -432,6 +456,9 @@ public partial class MainWindowViewModel : ObservableObject
         if (ShowUpdatesOnly && model.Status != PackageStatus.NeedsUpdate)
             return false;
 
+        if (ShowOrphansOnly && !model.Orphan)
+            return false;
+
         if (SearchText.Length > 0)
         {
             bool Matches(string text) => text.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
@@ -446,13 +473,15 @@ public partial class MainWindowViewModel : ObservableObject
     private void UpdateCounters()
     {
         int pacman = 0, aur = 0, flatpak = 0, cargo = 0, mise = 0, rustup = 0, fvm = 0;
-        int pacmanUpdates = 0, aurUpdates = 0, devUpdates = 0, totalUpdates = 0, selected = 0;
+        int pacmanUpdates = 0, aurUpdates = 0, devUpdates = 0, totalUpdates = 0, selected = 0, orphans = 0;
 
         foreach (var item in _all)
         {
             var model = item.Model;
             if (model.Selected)
                 ++selected;
+            if (model.Orphan)
+                ++orphans;
             var needsUpdate = model.Status == PackageStatus.NeedsUpdate;
             if (needsUpdate)
                 ++totalUpdates;
@@ -511,9 +540,14 @@ public partial class MainWindowViewModel : ObservableObject
 
         UpdatesChipText = Loc.T("Updates (%1)", totalUpdates);
         UpdateSelectedText = Loc.T("Update Selected (%1)", selected);
+        RemoveSelectedText = Loc.T("Remove Selected (%1)", selected);
+        OrphansChipText = Loc.T("Orphans (%1)", orphans);
         HasUpdates = totalUpdates > 0;
         if (!HasUpdates && ShowUpdatesOnly)
             ShowUpdatesOnly = false;
+        HasOrphans = orphans > 0;
+        if (!HasOrphans && ShowOrphansOnly)
+            ShowOrphansOnly = false;
 
         SelectionText = selected > 0 ? Loc.T("Selected: %1", selected) : string.Empty;
         HasSelection = selected > 0;
@@ -583,7 +617,7 @@ public partial class MainWindowViewModel : ObservableObject
             if (_updatesLoaded)
                 ApplyUpdatesToModels();
             ApplyFilter();
-            SyncUpdateSelection(ShowUpdatesOnly);
+            SyncFilterSelection();
             UpdateCounters();
             StatusMessage = Loc.T("Loaded %1 packages", packages.Count);
         }
@@ -621,7 +655,7 @@ public partial class MainWindowViewModel : ObservableObject
             _updatesLoaded = true;
             ApplyUpdatesToModels();
             ApplyFilter();
-            SyncUpdateSelection(ShowUpdatesOnly);
+            SyncFilterSelection();
             UpdateCounters();
             StatusMessage = HasUpdates
                 ? Loc.T("%1 updates available", CountAllUpdates())
@@ -753,6 +787,26 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task RemoveSelectedOrphansAsync()
+    {
+        var packages = _all
+            .Where(item => item.Model.Selected && item.Model.Orphan)
+            .Select(item => item.Model)
+            .ToList();
+        if (packages.Count == 0)
+            return;
+        var names = string.Join(", ", packages.Select(package => package.Name));
+        var confirmed = await _dialogs.ConfirmAsync(
+            Loc.T("Remove Packages"),
+            Loc.Tn("Remove the following orphan package?", "Remove the following %1 orphan packages?",
+                packages.Count, packages.Count) + "\n\n" + names,
+            Loc.T("OK"), Loc.T("Cancel"));
+        if (!confirmed)
+            return;
+        await RunOperationAsync(PackageOperation.Remove, packages);
+    }
+
+    [RelayCommand]
     private async Task InstallPackageAsync(PackageItemViewModel? item)
     {
         if (item is null)
@@ -788,6 +842,47 @@ public partial class MainWindowViewModel : ObservableObject
             Loc.T("Update Package"), message, Loc.T("OK"), Loc.T("Cancel"));
         if (confirmed)
             await RunOperationAsync(PackageOperation.Update, [item.Model]);
+    }
+
+    [RelayCommand]
+    private async Task MakeExplicitAsync(PackageItemViewModel? item)
+    {
+        if (item is null || IsBusy)
+            return;
+        var confirmed = await _dialogs.ConfirmAsync(
+            Loc.T("Mark Explicitly Installed"),
+            Loc.T("Mark %1 as explicitly installed?", item.Name),
+            Loc.T("OK"), Loc.T("Cancel"));
+        if (!confirmed)
+            return;
+
+        var ok = false;
+        BeginBusy();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
+        try
+        {
+            StatusMessage = Loc.T("Marking %1 as explicitly installed…", item.Name);
+            var run = await _manager.MarkExplicitAsync(item.Model, cts.Token);
+            ok = run.Ok;
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Loc.T("Cancelled");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+
+        await RefreshAsync();
+        StatusMessage = ok
+            ? Loc.T("%1 is now explicitly installed", item.Name)
+            : Loc.T("Failed: %1", item.Name);
     }
 
     // ------------------------------------------------------------------- log
@@ -991,6 +1086,7 @@ public partial class MainWindowViewModel : ObservableObject
             CanUpdateSelectedPackage = false;
             CanUninstallSelectedPackage = false;
             IsInstalledSelectedPackage = false;
+            CanMakeExplicit = false;
             return;
         }
 
@@ -1011,7 +1107,9 @@ public partial class MainWindowViewModel : ObservableObject
         Add(Loc.T("Origin:"), model.Origin);
         Add(Loc.T("Size:"), model.Size);
         Add(Loc.T("Install date:"), model.InstallDate);
-        Add(Loc.T("Install reason:"), model.InstallReason);
+        Add(Loc.T("Install reason:"), model.Backend is Backend.Pacman or Backend.Aur
+            ? (model.Explicit ? Loc.T("Explicitly installed") : Loc.T("Installed as a dependency"))
+            : model.InstallReason);
         Add(Loc.T("Packager:"), model.Packager);
         if (model.Url.Length > 0)
             DetailFields.Add(DetailFieldViewModel.Link(Loc.T("URL:"), model.Url));
@@ -1029,6 +1127,7 @@ public partial class MainWindowViewModel : ObservableObject
         CanUpdateSelectedPackage = model.Status == PackageStatus.NeedsUpdate;
         CanUninstallSelectedPackage = model.Installed;
         IsInstalledSelectedPackage = model.Installed;
+        CanMakeExplicit = model.Backend is Backend.Pacman or Backend.Aur && !model.Explicit;
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);

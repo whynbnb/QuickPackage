@@ -163,7 +163,11 @@ public sealed partial class PackageManager
                 case "Repository": package.Origin = value; currentKey = "origin"; break;
                 case "Installed Size": package.Size = value; currentKey = "size"; break;
                 case "Install Date": package.InstallDate = value; currentKey = "date"; break;
-                case "Install Reason": package.InstallReason = value; currentKey = "reason"; break;
+                case "Install Reason":
+                    package.InstallReason = value;
+                    package.Explicit = value.StartsWith("Explicitly", StringComparison.OrdinalIgnoreCase);
+                    currentKey = "reason";
+                    break;
                 case "Packager": package.Packager = value; currentKey = "packager"; break;
                 case "URL": package.Url = value; currentKey = "url"; break;
                 case "Licenses": package.Licenses = value; currentKey = "licenses"; break;
@@ -185,8 +189,18 @@ public sealed partial class PackageManager
                 repoByName.TryAdd(match.Groups[2].Value, match.Groups[1].Value);
         }
         var enabled = new List<Package>(result.Count);
+        var orphanRun = await CommandRunner.RunAsync(
+            "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken).ConfigureAwait(false);
+        var orphans = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rawLine in orphanRun.Output.Split('\n'))
+        {
+            var name = rawLine.Trim();
+            if (name.Length > 0)
+                orphans.Add(name);
+        }
         foreach (var item in result)
         {
+            item.Orphan = orphans.Contains(item.Name);
             if (repoByName.TryGetValue(item.Name, out var repo))
             {
                 item.Origin = repo;
@@ -702,6 +716,18 @@ public sealed partial class PackageManager
         }
 
         OperationFinished?.Invoke(state.Ok, state.LastError);
+    }
+
+    /// <summary>Promotes a dependency-installed package to explicitly installed.</summary>
+    public async Task<CommandRunner.Result> MarkExplicitAsync(
+        Package package, CancellationToken cancellationToken)
+    {
+        Report(Loc.T("Marking %1 as explicitly installed…", package.Name));
+        var run = await CommandRunner.RunAsync(
+            "sudo", ["pacman", "-D", "--asexplicit", package.EffectiveId], 300_000,
+            ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Done: %1", package.Name) : Loc.T("Failed: %1", package.Name));
+        return run;
     }
 
     private List<string>? BuildArguments(

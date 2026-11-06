@@ -37,9 +37,11 @@ public sealed class LocStrings : ObservableObject
     public string SelectPackageHint => Loc.T("Select a package to see details");
     public string UpdateDetail => Loc.T("Update");
     public string UninstallDetail => Loc.T("Uninstall");
+    public string MakeExplicit => Loc.T("Make Explicit");
     public string BackendsDisabledHint => Loc.T("All package backends are disabled. Enable at least one in Settings.");
     public string NoMatchingPackages => Loc.T("No matching packages");
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
+    public string ShowOnlyOrphans => Loc.T("Show only orphan packages");
 
     public string ActivityLog => Loc.T("Activity log");
     public string Stop => Loc.T("Stop");

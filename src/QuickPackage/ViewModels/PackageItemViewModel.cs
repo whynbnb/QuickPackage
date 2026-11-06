@@ -63,6 +63,44 @@ public partial class PackageItemViewModel : ObservableObject
         }
     }
 
+    /// <summary>Only pacman/AUR packages carry an install reason.</summary>
+    public bool ShowInstallReason => Model.Backend is Backend.Pacman or Backend.Aur;
+
+    public string InstallReasonText => Model.Explicit
+        ? Loc.T("Explicit")
+        : Loc.T("Dependency");
+
+    public IBrush ReasonBackground
+    {
+        get
+        {
+            var (r, g, b) = ReasonColor;
+            return Brush(r, g, b, 40);
+        }
+    }
+
+    public IBrush ReasonBorderBrush
+    {
+        get
+        {
+            var (r, g, b) = ReasonColor;
+            return Brush(r, g, b, 115);
+        }
+    }
+
+    public IBrush ReasonForeground
+    {
+        get
+        {
+            var (r, g, b) = ReasonColor;
+            return Brush(r, g, b, 255);
+        }
+    }
+
+    private (byte R, byte G, byte B) ReasonColor => Model.Explicit
+        ? ((byte)46, (byte)160, (byte)120)
+        : ((byte)214, (byte)132, (byte)40);
+
     /// <summary>"id · description", with empty parts omitted.</summary>
     public string Subtitle
     {
@@ -219,6 +257,11 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(OriginBackground));
         OnPropertyChanged(nameof(OriginBorderBrush));
         OnPropertyChanged(nameof(OriginForeground));
+        OnPropertyChanged(nameof(ShowInstallReason));
+        OnPropertyChanged(nameof(InstallReasonText));
+        OnPropertyChanged(nameof(ReasonBackground));
+        OnPropertyChanged(nameof(ReasonBorderBrush));
+        OnPropertyChanged(nameof(ReasonForeground));
         OnPropertyChanged(nameof(Subtitle));
         OnPropertyChanged(nameof(TagText));
         OnPropertyChanged(nameof(TagFontWeight));
