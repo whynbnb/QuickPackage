@@ -43,7 +43,7 @@
     </Menu>
 
     <!-- Toolbar: big system / developer switch, search and actions -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto,Auto" Margin="12,6,12,4" ColumnSpacing="10">
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto" Margin="12,6,12,4" ColumnSpacing="10">
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
         <ToggleButton Classes="mode" Content="{Binding L.SystemPackages}"
                       IsChecked="{Binding IsSystemMode, Mode=TwoWay}"/>
@@ -55,13 +55,9 @@
       <TextBox Grid.Column="1" Text="{Binding SearchText, Mode=TwoWay}"
                PlaceholderText="{Binding L.SearchPackages}" VerticalAlignment="Center"/>
 
-      <Button Grid.Column="2" Classes="toolbar" Content="{Binding L.Install}"
-              Command="{Binding InstallSelectedCommand}" IsEnabled="{Binding CanInstallRemove}"/>
-      <Button Grid.Column="3" Classes="toolbar" Content="{Binding L.Remove}"
-              Command="{Binding RemoveSelectedCommand}" IsEnabled="{Binding CanInstallRemove}"/>
-      <Button Grid.Column="4" Classes="toolbar" Content="{Binding L.Refresh}"
+      <Button Grid.Column="2" Classes="toolbar" Content="{Binding L.Refresh}"
               Command="{Binding RefreshCommand}" IsEnabled="{Binding IsNotBusy}"/>
-      <Button Grid.Column="5" Classes="toolbar" Content="{Binding UpdatesButtonText}"
+      <Button Grid.Column="3" Classes="toolbar" Content="{Binding UpdatesButtonText}"
               Command="{Binding ShowUpdatesCommand}" IsEnabled="{Binding HasUpdates}"/>
     </Grid>
 
@@ -195,17 +191,20 @@
                          IsVisible="{Binding HasDetailDescription}"/>
 
               <StackPanel Orientation="Horizontal" Spacing="6">
-                <Button Content="{Binding L.Install}"
+                <Button Classes="detail" Content="{Binding L.Install}"
                         Command="{Binding InstallPackageCommand}"
                         CommandParameter="{Binding SelectedPackage}"
+                        IsVisible="{Binding CanInstallSelectedPackage}"
                         IsEnabled="{Binding CanInstallSelectedPackage}"/>
-                <Button Content="{Binding L.UpdateDetail}"
+                <Button Classes="detail primary" Content="{Binding L.UpdateDetail}"
                         Command="{Binding UpdatePackageCommand}"
                         CommandParameter="{Binding SelectedPackage}"
+                        IsVisible="{Binding IsInstalledSelectedPackage}"
                         IsEnabled="{Binding CanUpdateSelectedPackage}"/>
-                <Button Content="{Binding L.UninstallDetail}"
+                <Button Classes="detail danger" Content="{Binding L.UninstallDetail}"
                         Command="{Binding UninstallPackageCommand}"
                         CommandParameter="{Binding SelectedPackage}"
+                        IsVisible="{Binding CanUninstallSelectedPackage}"
                         IsEnabled="{Binding CanUninstallSelectedPackage}"/>
               </StackPanel>
             </StackPanel>

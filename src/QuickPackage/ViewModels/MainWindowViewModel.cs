@@ -150,6 +150,9 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _canUninstallSelectedPackage;
 
     [ObservableProperty]
+    private bool _isInstalledSelectedPackage;
+
+    [ObservableProperty]
     private bool _isLogExpanded;
 
     [ObservableProperty]
@@ -487,7 +490,7 @@ public partial class MainWindowViewModel : ObservableObject
         SetChipLabel(ChipKind.Fvm, ChipText(Loc.T("FVM"), fvm, CountUpdates(Backend.Fvm)));
 
         UpdatesChipText = Loc.T("Updates (%1)", totalUpdates);
-        UpdatesButtonText = Loc.T("Updates");
+        UpdatesButtonText = Loc.T("Update List");
         HasUpdates = totalUpdates > 0;
         if (!HasUpdates && ShowUpdatesOnly)
             ShowUpdatesOnly = false;
@@ -993,6 +996,7 @@ public partial class MainWindowViewModel : ObservableObject
             CanInstallSelectedPackage = false;
             CanUpdateSelectedPackage = false;
             CanUninstallSelectedPackage = false;
+            IsInstalledSelectedPackage = false;
             return;
         }
 
@@ -1030,6 +1034,7 @@ public partial class MainWindowViewModel : ObservableObject
         CanInstallSelectedPackage = !model.Installed;
         CanUpdateSelectedPackage = model.Status == PackageStatus.NeedsUpdate;
         CanUninstallSelectedPackage = model.Installed;
+        IsInstalledSelectedPackage = model.Installed;
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);

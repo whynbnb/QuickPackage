@@ -117,6 +117,38 @@
     <Setter Property="FontFamily" Value="{DynamicResource ContentControlThemeFontFamily}"/>
   </Style>
 
+  <!-- Detail-pane actions share the same geometry; only the semantic tint
+       differs (blue for update, red for the destructive uninstall). -->
+  <Style Selector="Button.detail">
+    <Setter Property="CornerRadius" Value="6"/>
+    <Setter Property="Padding" Value="12,5"/>
+    <Setter Property="MinWidth" Value="64"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="HorizontalContentAlignment" Value="Center"/>
+    <Setter Property="VerticalContentAlignment" Value="Center"/>
+  </Style>
+  <Style Selector="Button.primary">
+    <Setter Property="BorderBrush" Value="{DynamicResource PrimaryBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource PrimaryBackgroundBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+  </Style>
+  <Style Selector="Button.primary:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource PrimaryHoverBrush}"/>
+  </Style>
+  <Style Selector="Button.danger">
+    <Setter Property="BorderBrush" Value="{DynamicResource DangerBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource DangerBackgroundBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource DangerBrush}"/>
+  </Style>
+  <Style Selector="Button.danger:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource DangerHoverBrush}"/>
+  </Style>
+  <Style Selector="Button.detail:disabled">
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource SubtleTextBrush}"/>
+  </Style>
+
   <!-- Flat, chrome-less buttons used by the activity log header. -->
   <Style Selector="Button.ghost">
     <Setter Property="Background" Value="Transparent"/>
