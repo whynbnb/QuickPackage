@@ -12,4 +12,6 @@ public interface IDialogService
     Task ShowSnapshotsAsync(SnapshotsViewModel viewModel);
 
     Task ShowCacheCleanupAsync(CacheViewModel viewModel);
+
+    Task<string?> AskPasswordAsync(string title, string message);
 }

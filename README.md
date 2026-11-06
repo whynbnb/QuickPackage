@@ -30,6 +30,8 @@ C# 14 and Avalonia.
   automatic X11/XWayland fallback otherwise
 - Stop a running refresh/update/operation with the footer button or `Esc`,
   and a configurable timeout for read-only queries
+- Asks for the sudo password inside the app when no cached credentials are
+  available, and confirms cache cleanups before running them
 - A collapsible, resizable **activity log** at the bottom shows the commands
   being run and their live output, grouped per command so parallel commands
   never interleave, with a sticky header that keeps the current command in

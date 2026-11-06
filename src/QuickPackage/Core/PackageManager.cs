@@ -29,6 +29,12 @@ public sealed partial class PackageManager
     // Only paru and yay are supported; empty means auto-detect.
     private string _preferredAurHelper = string.Empty;
 
+    // Supplies the sudo password when no cached credentials are available.
+    // The callback is responsible for showing the prompt on the UI thread.
+    private Func<Task<string?>>? _passwordProvider;
+
+    public void SetPasswordProvider(Func<Task<string?>>? provider) => _passwordProvider = provider;
+
     public void SetAurHelper(string? helper)
         => _preferredAurHelper = helper is "paru" or "yay" ? helper : string.Empty;
 
@@ -123,6 +129,9 @@ public sealed partial class PackageManager
     public async Task<CommandRunner.Result> CleanPacmanCacheAsync(
         CacheCleanMode mode, CancellationToken cancellationToken)
     {
+        if (!await EnsureSudoAsync(cancellationToken).ConfigureAwait(false))
+            return new CommandRunner.Result(false, Loc.T("Authentication failed"));
+
         string executable;
         List<string> arguments;
         if (mode == CacheCleanMode.KeepLatest && CommandRunner.HasExecutable("paccache"))
@@ -160,6 +169,9 @@ public sealed partial class PackageManager
         var helper = AurHelper();
         if (helper is null)
             return new CommandRunner.Result(false, Loc.T("No AUR helper (paru or yay) found"));
+
+        if (!await EnsureSudoAsync(cancellationToken).ConfigureAwait(false))
+            return new CommandRunner.Result(false, Loc.T("Authentication failed"));
 
         Report(Loc.T("Cleaning the AUR helper cache…"));
         var run = await CommandRunner.RunAsync(
@@ -880,6 +892,40 @@ public sealed partial class PackageManager
 
     // ------------------------------------------------------------- operations
 
+    /// <summary>
+    /// Makes sure sudo can run without a terminal. Cached credentials are
+    /// reused; otherwise the UI is asked for the password and
+    /// <c>sudo -v</c> refreshes the ticket. Returns false when the user
+    /// cancels or every attempt fails.
+    /// </summary>
+    private async Task<bool> EnsureSudoAsync(CancellationToken cancellationToken)
+    {
+        var cached = await CommandRunner.RunAsync(
+            "sudo", ["-n", "true"], 30_000, null, cancellationToken).ConfigureAwait(false);
+        if (cached.Ok)
+            return true;
+
+        if (_passwordProvider is null)
+            return false;
+
+        for (var attempt = 0; attempt < 3; ++attempt)
+        {
+            var password = await _passwordProvider().ConfigureAwait(false);
+            if (string.IsNullOrEmpty(password))
+                return false;
+
+            var run = await CommandRunner.RunAsync(
+                "sudo", ["-S", "-p", "", "-v"], 60_000, null, cancellationToken,
+                standardInput: password + "\n").ConfigureAwait(false);
+            if (run.Ok)
+                return true;
+
+            Report(Loc.T("Authentication failed"));
+        }
+
+        return false;
+    }
+
     private sealed class OperationState
     {
         public bool Ok { get; set; } = true;
@@ -892,6 +938,18 @@ public sealed partial class PackageManager
         CancellationToken cancellationToken)
     {
         var state = new OperationState();
+
+        // pacman and AUR helper operations need root. Ask for the password
+        // up front instead of letting sudo fail with "no tty present".
+        if (packages.Any(package => package.Backend is Backend.Pacman or Backend.Aur)
+            && !await EnsureSudoAsync(cancellationToken))
+        {
+            state.Ok = false;
+            state.LastError = Loc.T("Authentication failed");
+            Report(state.LastError);
+            OperationFinished?.Invoke(false, state.LastError);
+            return;
+        }
 
         // Pacman must never be partially updated: one full "-Syu" upgrades the
         // whole system. AUR packages get one helper pass; mise/rustup one
@@ -1016,6 +1074,9 @@ public sealed partial class PackageManager
     public async Task<CommandRunner.Result> MarkExplicitAsync(
         Package package, CancellationToken cancellationToken)
     {
+        if (!await EnsureSudoAsync(cancellationToken).ConfigureAwait(false))
+            return new CommandRunner.Result(false, Loc.T("Authentication failed"));
+
         Report(Loc.T("Marking %1 as explicitly installed…", package.Name));
         var run = await CommandRunner.RunAsync(
             "sudo", ["pacman", "-D", "--asexplicit", package.EffectiveId], 300_000,

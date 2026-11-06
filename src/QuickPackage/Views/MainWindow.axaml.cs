@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Threading;
@@ -158,5 +159,17 @@ public partial class MainWindow : Window, IDialogService
     {
         var dialog = new CacheWindow { DataContext = viewModel };
         await dialog.ShowDialog(this);
+    }
+
+    public async Task<string?> AskPasswordAsync(string title, string message)
+    {
+        // The prompt may be requested from a modal cache/snapshot window, so
+        // parent it to whichever window is currently active.
+        Window owner = this;
+        if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
+            owner = desktop.Windows.LastOrDefault(window => window.IsActive) ?? this;
+
+        var dialog = new PasswordWindow(title, message);
+        return await dialog.ShowDialog<string?>(owner);
     }
 }

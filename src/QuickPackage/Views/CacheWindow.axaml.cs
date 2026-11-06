@@ -24,14 +24,28 @@ public partial class CacheWindow : Window
 
     private async void OnCleanUninstalled(object? sender, RoutedEventArgs e)
     {
-        if (ViewModel is { } viewModel)
+        if (ViewModel is not { } viewModel)
+            return;
+        if (await ConfirmAsync(
+                Loc.T("Clean uninstalled versions"),
+                Loc.T("Remove cached packages that are no longer installed?"),
+                Loc.T("OK"), Loc.T("Cancel")))
+        {
             await viewModel.CleanPacmanAsync(PackageManager.CacheCleanMode.Uninstalled);
+        }
     }
 
     private async void OnKeepLatest(object? sender, RoutedEventArgs e)
     {
-        if (ViewModel is { } viewModel)
+        if (ViewModel is not { } viewModel)
+            return;
+        if (await ConfirmAsync(
+                Loc.T("Keep only the latest version"),
+                Loc.T("Remove older cached versions of installed packages?"),
+                Loc.T("OK"), Loc.T("Cancel")))
+        {
             await viewModel.CleanPacmanAsync(PackageManager.CacheCleanMode.KeepLatest);
+        }
     }
 
     private async void OnCleanAll(object? sender, RoutedEventArgs e)
@@ -49,8 +63,15 @@ public partial class CacheWindow : Window
 
     private async void OnCleanAur(object? sender, RoutedEventArgs e)
     {
-        if (ViewModel is { } viewModel)
+        if (ViewModel is not { } viewModel)
+            return;
+        if (await ConfirmAsync(
+                Loc.T("Clean AUR cache"),
+                Loc.T("Remove cached AUR sources and built packages that are no longer needed?"),
+                Loc.T("OK"), Loc.T("Cancel")))
+        {
             await viewModel.CleanAurAsync(all: false);
+        }
     }
 
     private async void OnCleanAurAll(object? sender, RoutedEventArgs e)

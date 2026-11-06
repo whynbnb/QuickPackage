@@ -23,7 +23,8 @@ public static class CommandRunner
         int timeoutMilliseconds,
         IReadOnlyDictionary<string, string?>? extraEnvironment = null,
         CancellationToken cancellationToken = default,
-        bool operation = false)
+        bool operation = false,
+        string? standardInput = null)
     {
         var argumentList = arguments as IReadOnlyList<string> ?? arguments.ToList();
         var commandLine = FormatCommand(executable, argumentList);
@@ -36,6 +37,7 @@ public static class CommandRunner
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = standardInput is not null,
             CreateNoWindow = true,
             StandardOutputEncoding = Encoding.UTF8,
             StandardErrorEncoding = Encoding.UTF8,
@@ -65,6 +67,19 @@ public static class CommandRunner
             process = Process.Start(startInfo);
             if (process is null)
                 return new Result(false, string.Empty);
+
+            if (standardInput is not null)
+            {
+                try
+                {
+                    await process.StandardInput.WriteAsync(standardInput).ConfigureAwait(false);
+                    process.StandardInput.Close();
+                }
+                catch
+                {
+                    // The process may have exited before reading stdin.
+                }
+            }
 
             var stdoutTask = PumpAsync(process.StandardOutput);
             var stderrTask = PumpAsync(process.StandardError);

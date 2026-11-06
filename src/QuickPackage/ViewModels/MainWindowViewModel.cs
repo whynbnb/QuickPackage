@@ -57,6 +57,10 @@ public partial class MainWindowViewModel : ObservableObject
         _config = Config.Load();
         _proxy.Load(_config);
 
+        // Sudo needs a password when no ticket is cached; the manager asks
+        // back through this callback so the prompt lives in the UI.
+        _manager.SetPasswordProvider(AskSudoPasswordAsync);
+
         _checkUpdatesOnStart = _config.GetBool("General", "CheckUpdatesOnStart", true);
         _languageSetting = _config.GetString("General", "Language", "system");
         LoadBackendSettings();
@@ -1013,6 +1017,15 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     // ---------------------------------------------------------------- dialogs
+
+    private async Task<string?> AskSudoPasswordAsync()
+    {
+        var title = Loc.T("Authentication required");
+        var message = Loc.T("Enter your password to run pacman with administrator privileges.");
+        if (Dispatcher.UIThread.CheckAccess())
+            return await _dialogs.AskPasswordAsync(title, message);
+        return await Dispatcher.UIThread.InvokeAsync(() => _dialogs.AskPasswordAsync(title, message));
+    }
 
     [RelayCommand]
     private async Task SettingsAsync()
