@@ -1342,9 +1342,14 @@ public sealed partial class PackageManager
                     : ["sudo", "pacman", "-Rns", "--noconfirm", id];
 
             case Backend.Flatpak:
-                return operation == PackageOperation.Remove
-                    ? ["flatpak", "uninstall", "-y", id]
-                    : ["flatpak", "update", "-y", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["flatpak", "uninstall", "-y", id],
+                    PackageOperation.Install when package.Origin.Length > 0 =>
+                        ["flatpak", "install", "-y", package.Origin, id],
+                    PackageOperation.Install => ["flatpak", "install", "-y", id],
+                    _ => ["flatpak", "update", "-y", id],
+                };
 
             case Backend.Mise:
                 return operation == PackageOperation.Remove
