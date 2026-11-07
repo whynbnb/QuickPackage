@@ -203,6 +203,28 @@
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:PackageItemViewModel">
                 <Border Classes="card">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="{Binding InstallText}" Command="{Binding InstallCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowInstallAction}"/>
+                      <MenuItem Header="{Binding UpdateText}" Command="{Binding UpdateCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowInstalledActions}"/>
+                      <MenuItem Header="{Binding UninstallText}" Command="{Binding UninstallCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowInstalledActions}"/>
+                      <Separator/>
+                      <MenuItem Header="{Binding FilesText}" Command="{Binding FilesCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowFilesAction}"/>
+                      <MenuItem Header="{Binding MakeExplicitText}" Command="{Binding MakeExplicitCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowMakeExplicitAction}"/>
+                      <MenuItem Header="{Binding IgnoreText}" Command="{Binding ToggleIgnoreCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowInstalledActions}"/>
+                      <Separator/>
+                      <MenuItem Header="{Binding CopyNameText}" Command="{Binding CopyNameCommand}"
+                                CommandParameter="{Binding}"/>
+                      <MenuItem Header="{Binding OpenAurText}" Command="{Binding OpenAurCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowAurAction}"/>
+                    </ContextMenu>
+                  </Border.ContextMenu>
                   <Grid ColumnDefinitions="Auto,*,Auto">
                     <CheckBox Grid.Column="0" IsChecked="{Binding IsSelected, Mode=TwoWay}"
                               IsVisible="{Binding ShowSelection}"

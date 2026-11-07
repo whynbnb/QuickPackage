@@ -1,3 +1,4 @@
+using System.Windows.Input;
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -16,6 +17,33 @@ public partial class PackageItemViewModel : ObservableObject
     private readonly IRelayCommand<string>? _filterByGroup;
 
     public Package Model { get; }
+
+    public ICommand? InstallCommand { get; init; }
+    public ICommand? UninstallCommand { get; init; }
+    public ICommand? UpdateCommand { get; init; }
+    public ICommand? FilesCommand { get; init; }
+    public ICommand? MakeExplicitCommand { get; init; }
+    public ICommand? ToggleIgnoreCommand { get; init; }
+    public ICommand? CopyNameCommand { get; init; }
+    public ICommand? OpenAurCommand { get; init; }
+
+    public string InstallText => Loc.T("Install");
+    public string UninstallText => Loc.T("Uninstall");
+    public string UpdateText => Loc.T("Update");
+    public string FilesText => Loc.T("Files");
+    public string MakeExplicitText => Loc.T("Make Explicit");
+    public string IgnoreText => Model.Ignored ? Loc.T("Cancel ignored updates") : Loc.T("Ignore updates");
+    public string CopyNameText => Loc.T("Copy package name");
+    public string OpenAurText => Loc.T("Open AUR page");
+
+    public bool ShowInstallAction => !Model.Installed;
+    public bool ShowInstalledActions => Model.Installed;
+    public bool ShowAurAction => Model.Backend == Backend.Aur;
+    public bool ShowFilesAction => Model.Installed
+        && Model.Backend is Backend.Pacman or Backend.Aur;
+    public bool ShowMakeExplicitAction => Model.Installed
+        && Model.Backend is Backend.Pacman or Backend.Aur
+        && !Model.Explicit;
 
     public PackageItemViewModel(Package model, IRelayCommand<string>? filterByGroup = null)
     {
@@ -326,5 +354,11 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(BadgeText));
         OnPropertyChanged(nameof(BadgeBackground));
         OnPropertyChanged(nameof(BadgeForeground));
+        OnPropertyChanged(nameof(IgnoreText));
+        OnPropertyChanged(nameof(ShowInstallAction));
+        OnPropertyChanged(nameof(ShowInstalledActions));
+        OnPropertyChanged(nameof(ShowAurAction));
+        OnPropertyChanged(nameof(ShowFilesAction));
+        OnPropertyChanged(nameof(ShowMakeExplicitAction));
     }
 }

@@ -986,7 +986,7 @@ public partial class MainWindowViewModel : ObservableObject
                     continue;
                 existing.Add(package.Name);
                 existing.Add(package.EffectiveId);
-                var item = new PackageItemViewModel(package, FilterByGroupCommand);
+                var item = CreatePackageItem(package);
                 item.PropertyChanged += OnPackagePropertyChanged;
                 _all.Add(item);
                 ++added;
@@ -1248,7 +1248,7 @@ public partial class MainWindowViewModel : ObservableObject
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
                 package.Ignored = _ignoredPackages.Contains(package.Name);
-                var item = new PackageItemViewModel(package, FilterByGroupCommand);
+                var item = CreatePackageItem(package);
                 // Keep the footer selection count and action buttons in sync
                 // when a card's checkbox is toggled.
                 item.PropertyChanged += OnPackagePropertyChanged;
@@ -1649,6 +1649,38 @@ public partial class MainWindowViewModel : ObservableObject
             ++unit;
         }
         return unit == 0 ? $"{bytes} B" : $"{value:0.#} {units[unit]}";
+    }
+
+    private PackageItemViewModel CreatePackageItem(Package package)
+        => new(package, FilterByGroupCommand)
+        {
+            InstallCommand = InstallPackageCommand,
+            UninstallCommand = UninstallPackageCommand,
+            UpdateCommand = UpdatePackageCommand,
+            FilesCommand = ShowPackageFilesCommand,
+            MakeExplicitCommand = MakeExplicitCommand,
+            ToggleIgnoreCommand = ToggleIgnoreCommand,
+            CopyNameCommand = CopyPackageNameCommand,
+            OpenAurCommand = OpenAurPageCommand,
+        };
+
+    [RelayCommand]
+    private async Task CopyPackageNameAsync(PackageItemViewModel? item)
+    {
+        if (item is null)
+            return;
+        var window = (Application.Current?.ApplicationLifetime as IClassicDesktopStyleApplicationLifetime)?.MainWindow;
+        if (window?.Clipboard is { } clipboard)
+            await clipboard.SetTextAsync(item.Model.EffectiveId);
+        StatusMessage = Loc.T("Package name copied to clipboard");
+    }
+
+    [RelayCommand]
+    private static void OpenAurPage(PackageItemViewModel? item)
+    {
+        if (item is null)
+            return;
+        Loc.OpenUrl("https://aur.archlinux.org/packages/" + Uri.EscapeDataString(item.Model.Name));
     }
 
     private async Task RunOperationAsync(PackageOperation operation, IReadOnlyList<Package> packages)
