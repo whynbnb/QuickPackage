@@ -1319,9 +1319,21 @@ public sealed partial class PackageManager
                     package.NewVersion, package.Origin, 0, 0));
             }
             if (packages.Any(p => p.Backend == Backend.Mise))
+            {
                 commands.Add(CommandRunner.FormatCommand("mise", ["upgrade"]));
+                foreach (var package in packages.Where(p => p.Backend == Backend.Mise))
+                    items.Add(new PreviewItem(
+                        Loc.T("Upgrade"), package.Name, package.Version,
+                        package.NewVersion, package.Origin, 0, 0));
+            }
             if (packages.Any(p => p.Backend == Backend.Rustup))
+            {
                 commands.Add(CommandRunner.FormatCommand("rustup", ["update"]));
+                foreach (var package in packages.Where(p => p.Backend == Backend.Rustup))
+                    items.Add(new PreviewItem(
+                        Loc.T("Upgrade"), package.Name, package.Version,
+                        package.NewVersion, package.Origin, 0, 0));
+            }
 
             return new TransactionPreview(error.Length == 0, error, commands, items, notes);
         }
@@ -1434,6 +1446,20 @@ public sealed partial class PackageManager
                     commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
                 items.Add(new PreviewItem(
                     Loc.T("Install"), package.Name, package.Version, package.NewVersion,
+                    package.Origin, 0, 0));
+            }
+        }
+        if (operation == PackageOperation.Remove)
+        {
+            foreach (var package in packages.Where(p =>
+                         p.Backend is not (Backend.Pacman or Backend.Aur)))
+            {
+                var arguments = BuildArguments(
+                    PackageOperation.Remove, package, package.EffectiveId, new OperationState());
+                if (arguments is not null)
+                    commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
+                items.Add(new PreviewItem(
+                    Loc.T("Remove"), package.Name, package.Version, string.Empty,
                     package.Origin, 0, 0));
             }
         }
