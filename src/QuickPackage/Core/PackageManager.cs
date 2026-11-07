@@ -1424,6 +1424,20 @@ public sealed partial class PackageManager
                     package.Origin, 0, 0));
             }
         }
+        else if (operation is PackageOperation.Download or PackageOperation.Reinstall)
+        {
+            foreach (var package in packages)
+            {
+                var arguments = BuildArguments(
+                    operation, package, package.EffectiveId, new OperationState());
+                if (arguments is null)
+                    continue;
+                commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
+                items.Add(new PreviewItem(
+                    operation == PackageOperation.Download ? Loc.T("Download") : Loc.T("Reinstall"),
+                    package.Name, package.Version, package.NewVersion, package.Origin, 0, 0));
+            }
+        }
 
         return new TransactionPreview(error.Length == 0, error, commands, items, notes);
     }
@@ -1786,6 +1800,8 @@ public sealed partial class PackageManager
             {
                 PackageOperation.Remove => Loc.T("Removing %1…", package.Name),
                 PackageOperation.Install => Loc.T("Installing %1…", package.Name),
+                PackageOperation.Download => Loc.T("Downloading %1…", package.Name),
+                PackageOperation.Reinstall => Loc.T("Reinstalling %1…", package.Name),
                 _ => Loc.T("Updating %1…", package.Name),
             });
             var environment = package.Backend == Backend.Aur
@@ -1809,6 +1825,87 @@ public sealed partial class PackageManager
         }
 
         OperationFinished?.Invoke(state.Ok, state.LastError);
+    }
+
+    public sealed record CachedPackage(string Path, string Version, string Size);
+
+    /// <summary>Lists cached pacman archives for one package, newest first.</summary>
+    public Task<List<CachedPackage>> GetCachedVersionsAsync(
+        Package package, CancellationToken cancellationToken)
+    {
+        var result = new List<CachedPackage>();
+        const string cache = "/var/cache/pacman/pkg";
+        if (!Directory.Exists(cache))
+            return Task.FromResult(result);
+
+        try
+        {
+            var prefix = package.Name + "-";
+            foreach (var file in Directory.EnumerateFiles(cache))
+            {
+                var name = Path.GetFileName(file);
+                if (!name.StartsWith(prefix, StringComparison.Ordinal))
+                    continue;
+                var rest = name[prefix.Length..];
+                var arch = rest.LastIndexOf(".pkg.tar", StringComparison.Ordinal);
+                if (arch <= 0)
+                    continue;
+                var version = rest[..arch];
+                var dash = version.LastIndexOf('-');
+                if (dash <= 0)
+                    continue;
+                version = version[..dash];
+                long size;
+                try
+                {
+                    size = new FileInfo(file).Length;
+                }
+                catch
+                {
+                    continue;
+                }
+                result.Add(new CachedPackage(file, version, HumanSize.Format(size)));
+            }
+        }
+        catch
+        {
+            // A missing or unreadable cache yields no versions.
+        }
+
+        result.Sort((left, right) => string.Compare(right.Version, left.Version, StringComparison.Ordinal));
+        return Task.FromResult(result);
+    }
+
+    /// <summary>Installs a cached archive with pacman -U.</summary>
+    public async Task<CommandRunner.Result> DowngradeAsync(
+        Package package, string archivePath, CancellationToken cancellationToken)
+    {
+        if (!(await EnsureSudoAsync(cancellationToken).ConfigureAwait(false)).Ok)
+            return new CommandRunner.Result(false, Loc.T("Authentication failed"));
+
+        Report(Loc.T("Downgrading %1…", package.Name));
+        var run = await RunNetworkAsync(
+            "sudo", ["pacman", "-U", "--noconfirm", archivePath],
+            _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman),
+            cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Done: %1", package.Name) : Loc.T("Failed: %1", package.Name));
+        return run;
+    }
+
+    /// <summary>Installs a local .pkg.tar.* archive with pacman -U.</summary>
+    public async Task<CommandRunner.Result> InstallLocalPackageAsync(
+        string archivePath, CancellationToken cancellationToken)
+    {
+        if (!(await EnsureSudoAsync(cancellationToken).ConfigureAwait(false)).Ok)
+            return new CommandRunner.Result(false, Loc.T("Authentication failed"));
+
+        Report(Loc.T("Installing local package…"));
+        var run = await RunNetworkAsync(
+            "sudo", ["pacman", "-U", "--noconfirm", archivePath],
+            _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman),
+            cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Local package installed") : Loc.T("Failed: %1", archivePath));
+        return run;
     }
 
     /// <summary>Promotes a dependency-installed package to explicitly installed.</summary>
@@ -1855,6 +1952,8 @@ public sealed partial class PackageManager
                     return null;
                 }
                 var aur = new List<string> { helper, "-S", "--noconfirm" };
+                if (operation == PackageOperation.Download)
+                    aur.Add("--downloadonly");
                 if (helper == "paru")
                     aur.Add("--skipreview");
                 AddSudoOverride(aur, sudoPath);
@@ -1862,40 +1961,67 @@ public sealed partial class PackageManager
                 return aur;
 
             case Backend.Pacman:
-                return operation == PackageOperation.Install
-                    ? ["sudo", "pacman", "-S", "--noconfirm", id]
-                    : ["sudo", "pacman", "-Rns", "--noconfirm", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["sudo", "pacman", "-Rns", "--noconfirm", id],
+                    PackageOperation.Download => ["sudo", "pacman", "-Sw", "--noconfirm", id],
+                    _ => ["sudo", "pacman", "-S", "--noconfirm", id],
+                };
 
             case Backend.Flatpak:
                 return operation switch
                 {
                     PackageOperation.Remove => ["flatpak", "uninstall", "-y", id],
+                    PackageOperation.Download => UnsupportedDownload(state),
                     PackageOperation.Install when package.Origin.Length > 0 =>
                         ["flatpak", "install", "-y", package.Origin, id],
                     PackageOperation.Install => ["flatpak", "install", "-y", id],
+                    PackageOperation.Reinstall when package.Origin.Length > 0 =>
+                        ["flatpak", "install", "-y", "--reinstall", package.Origin, id],
+                    PackageOperation.Reinstall =>
+                        ["flatpak", "install", "-y", "--reinstall", id],
                     _ => ["flatpak", "update", "-y", id],
                 };
 
             case Backend.Mise:
-                return operation == PackageOperation.Remove
-                    ? ["mise", "uninstall", id]
-                    : ["mise", "install", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["mise", "uninstall", id],
+                    PackageOperation.Download => UnsupportedDownload(state),
+                    _ => ["mise", "install", id],
+                };
 
             case Backend.Rustup:
-                return operation == PackageOperation.Remove
-                    ? ["rustup", "toolchain", "uninstall", id]
-                    : ["rustup", "toolchain", "install", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["rustup", "toolchain", "uninstall", id],
+                    PackageOperation.Download => UnsupportedDownload(state),
+                    _ => ["rustup", "toolchain", "install", id],
+                };
 
             case Backend.Fvm:
-                return operation == PackageOperation.Remove
-                    ? ["fvm", "remove", id]
-                    : ["fvm", "install", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["fvm", "remove", id],
+                    PackageOperation.Download => UnsupportedDownload(state),
+                    _ => ["fvm", "install", id],
+                };
 
             default:
-                return operation == PackageOperation.Remove
-                    ? ["cargo", "uninstall", id]
-                    : ["cargo", "install", id];
+                return operation switch
+                {
+                    PackageOperation.Remove => ["cargo", "uninstall", id],
+                    PackageOperation.Download => UnsupportedDownload(state),
+                    _ => ["cargo", "install", id],
+                };
         }
+    }
+
+    private static List<string>? UnsupportedDownload(OperationState state)
+    {
+        state.Ok = false;
+        state.LastError = Loc.T("Download only is not supported for this backend");
+        return null;
     }
 
     private static string Tail(string output)

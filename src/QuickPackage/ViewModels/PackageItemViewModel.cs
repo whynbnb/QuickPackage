@@ -26,6 +26,9 @@ public partial class PackageItemViewModel : ObservableObject
     public ICommand? ToggleIgnoreCommand { get; init; }
     public ICommand? CopyNameCommand { get; init; }
     public ICommand? OpenAurCommand { get; init; }
+    public ICommand? DownloadCommand { get; init; }
+    public ICommand? ReinstallCommand { get; init; }
+    public ICommand? DowngradeCommand { get; init; }
 
     public string InstallText => Loc.T("Install");
     public string UninstallText => Loc.T("Uninstall");
@@ -35,6 +38,9 @@ public partial class PackageItemViewModel : ObservableObject
     public string IgnoreText => Model.Ignored ? Loc.T("Cancel ignored updates") : Loc.T("Ignore updates");
     public string CopyNameText => Loc.T("Copy package name");
     public string OpenAurText => Loc.T("Open AUR page");
+    public string DownloadText => Loc.T("Download only");
+    public string ReinstallText => Loc.T("Reinstall");
+    public string DowngradeText => Loc.T("Downgrade…");
 
     public bool ShowInstallAction => !Model.Installed;
     public bool ShowInstalledActions => Model.Installed;
@@ -44,6 +50,10 @@ public partial class PackageItemViewModel : ObservableObject
     public bool ShowMakeExplicitAction => Model.Installed
         && Model.Backend is Backend.Pacman or Backend.Aur
         && !Model.Explicit;
+    public bool ShowDownloadAction => Model.Backend is Backend.Pacman or Backend.Aur;
+    public bool ShowReinstallAction => Model.Installed;
+    public bool ShowDowngradeAction => Model.Installed
+        && Model.Backend is Backend.Pacman or Backend.Aur;
 
     public PackageItemViewModel(Package model, IRelayCommand<string>? filterByGroup = null)
     {
@@ -360,5 +370,8 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowAurAction));
         OnPropertyChanged(nameof(ShowFilesAction));
         OnPropertyChanged(nameof(ShowMakeExplicitAction));
+        OnPropertyChanged(nameof(ShowDownloadAction));
+        OnPropertyChanged(nameof(ShowReinstallAction));
+        OnPropertyChanged(nameof(ShowDowngradeAction));
     }
 }

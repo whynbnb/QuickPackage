@@ -22,6 +22,8 @@ public interface IDialogService
 
     Task ShowPackageFilesAsync(PackageFilesViewModel viewModel);
 
+    Task<bool> ShowDowngradeAsync(DowngradeViewModel viewModel);
+
     Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null);
 }

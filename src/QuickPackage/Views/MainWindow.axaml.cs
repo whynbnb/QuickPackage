@@ -4,6 +4,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Input;
 using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
 using Avalonia.Threading;
 using QuickPackage.Core;
 using QuickPackage.ViewModels;
@@ -180,6 +181,25 @@ public partial class MainWindow : Window, IDialogService
             _viewModel.SaveContentSplitRatio(left / (left + right));
     }
 
+    private async void OnInstallLocalPackage(object? sender, RoutedEventArgs e)
+    {
+        var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = Loc.T("Install local package"),
+            AllowMultiple = false,
+            FileTypeFilter =
+            [
+                new FilePickerFileType(Loc.T("Arch package"))
+                {
+                    Patterns = ["*.pkg.tar.zst", "*.pkg.tar.xz", "*.pkg.tar.*"],
+                },
+            ],
+        });
+        var path = files.FirstOrDefault()?.TryGetLocalPath();
+        if (path is not null)
+            await _viewModel.InstallLocalPackageAsync(path);
+    }
+
     private async void OnOpened(object? sender, EventArgs e)
     {
         try
@@ -266,6 +286,12 @@ public partial class MainWindow : Window, IDialogService
     {
         var dialog = new PackageFilesWindow { DataContext = viewModel };
         await dialog.ShowDialog(this);
+    }
+
+    public async Task<bool> ShowDowngradeAsync(DowngradeViewModel viewModel)
+    {
+        var dialog = new DowngradeWindow { DataContext = viewModel };
+        return await dialog.ShowDialog<bool>(this);
     }
 
     public async Task<string?> AskPasswordAsync(

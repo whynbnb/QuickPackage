@@ -268,9 +268,20 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _canToggleIgnore;
 
     [ObservableProperty]
+    private bool _canDownload;
+
+    [ObservableProperty]
+    private bool _canReinstall;
+
+    [ObservableProperty]
+    private bool _canDowngrade;
+
+    [ObservableProperty]
     private string _ignoreMenuText = string.Empty;
 
-    public bool CanMoreActions => CanMakeExplicit || CanShowPackageFiles || CanToggleIgnore;
+    public bool CanMoreActions =>
+        CanMakeExplicit || CanShowPackageFiles || CanToggleIgnore
+        || CanDownload || CanReinstall || CanDowngrade;
 
     partial void OnCanMakeExplicitChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
@@ -279,6 +290,15 @@ public partial class MainWindowViewModel : ObservableObject
         => OnPropertyChanged(nameof(CanMoreActions));
 
     partial void OnCanToggleIgnoreChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanDownloadChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanReinstallChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanDowngradeChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
 
     [ObservableProperty]
@@ -1624,6 +1644,8 @@ public partial class MainWindowViewModel : ObservableObject
                 "Remove %1 packages · freed %2",
                 preview.Items.Count,
                 FormatBytes(preview.Items.Sum(item => item.InstalledBytes))),
+            PackageOperation.Download => Loc.T("Download %1 packages", preview.Items.Count),
+            PackageOperation.Reinstall => Loc.T("Reinstall %1 packages", preview.Items.Count),
             _ => Loc.T("Upgrade %1 packages", preview.Items.Count),
         };
         if (!preview.Ok)
@@ -1702,6 +1724,9 @@ public partial class MainWindowViewModel : ObservableObject
             ToggleIgnoreCommand = ToggleIgnoreCommand,
             CopyNameCommand = CopyPackageNameCommand,
             OpenAurCommand = OpenAurPageCommand,
+            DownloadCommand = DownloadPackageCommand,
+            ReinstallCommand = ReinstallPackageCommand,
+            DowngradeCommand = DowngradePackageCommand,
         };
 
     [RelayCommand]
@@ -1746,6 +1771,8 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 PackageOperation.Install => Loc.T("Installing selected packages…"),
                 PackageOperation.Remove => Loc.T("Removing selected packages…"),
+                PackageOperation.Download => Loc.T("Downloading selected packages…"),
+                PackageOperation.Reinstall => Loc.T("Reinstalling selected packages…"),
                 _ => Loc.T("Updating packages…"),
             };
             await _manager.RunOperationAsync(operation, packages, cts.Token);
@@ -1959,6 +1986,135 @@ public partial class MainWindowViewModel : ObservableObject
         {
             EndBusy();
         }
+    }
+
+    [RelayCommand]
+    private async Task DownloadPackageAsync(PackageItemViewModel? item)
+    {
+        if (item is null)
+            return;
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Download, [item.Model], Loc.T("Download Package"),
+            Loc.T("Download %1 without installing it?", item.Name));
+        if (confirmed)
+            await RunOperationAsync(PackageOperation.Download, [item.Model]);
+    }
+
+    [RelayCommand]
+    private async Task ReinstallPackageAsync(PackageItemViewModel? item)
+    {
+        if (item is null)
+            return;
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Reinstall, [item.Model], Loc.T("Reinstall Package"),
+            Loc.T("Reinstall %1?", item.Name));
+        if (confirmed)
+            await RunOperationAsync(PackageOperation.Reinstall, [item.Model]);
+    }
+
+    [RelayCommand]
+    private async Task DowngradePackageAsync(PackageItemViewModel? item)
+    {
+        if (item is null || IsBusy)
+            return;
+        BeginBusy();
+        List<PackageManager.CachedPackage> versions;
+        try
+        {
+            StatusMessage = Loc.T("Looking for cached versions of %1…", item.Name);
+            versions = await _manager.GetCachedVersionsAsync(item.Model, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+            EndBusy();
+            return;
+        }
+        EndBusy();
+
+        var candidates = versions.Where(version => version.Version != item.Model.Version).ToList();
+        if (candidates.Count == 0)
+        {
+            await _dialogs.ShowInfoAsync(
+                Loc.T("No cached versions"),
+                Loc.T("There are no other cached versions of %1.", item.Name));
+            return;
+        }
+
+        var viewModel = new DowngradeViewModel(item.Model, candidates);
+        if (!await _dialogs.ShowDowngradeAsync(viewModel) || viewModel.Selected is null)
+            return;
+
+        BeginBusy();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
+        var ok = false;
+        try
+        {
+            var run = await _manager.DowngradeAsync(item.Model, viewModel.Selected.Path, cts.Token);
+            ok = run.Ok;
+            StatusMessage = ok
+                ? Loc.T("Downgraded to %1", viewModel.Selected.Version)
+                : Loc.T("Failed: %1", item.Name);
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Loc.T("Cancelled");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+
+        if (ok)
+        {
+            await RefreshAsync();
+            await CheckUpdatesAsync();
+        }
+    }
+
+    /// <summary>Installs a local pacman archive selected by the file picker.</summary>
+    public async Task InstallLocalPackageAsync(string path)
+    {
+        if (IsBusy)
+            return;
+        var confirmed = await _dialogs.ConfirmAsync(
+            Loc.T("Install local package"),
+            Loc.T("Install %1 with pacman -U?", Path.GetFileName(path)),
+            Loc.T("OK"), Loc.T("Cancel"));
+        if (!confirmed)
+            return;
+
+        BeginBusy();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
+        try
+        {
+            StatusMessage = Loc.T("Installing local package…");
+            var run = await _manager.InstallLocalPackageAsync(path, cts.Token);
+            StatusMessage = run.Ok
+                ? Loc.T("Local package installed")
+                : Loc.T("Failed: %1", run.Output.Trim());
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Loc.T("Cancelled");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+
+        await RefreshAsync();
+        await CheckUpdatesAsync();
     }
 
     [RelayCommand]
@@ -2281,6 +2437,9 @@ public partial class MainWindowViewModel : ObservableObject
             CanMakeExplicit = false;
             CanShowPackageFiles = false;
             CanToggleIgnore = false;
+            CanDownload = false;
+            CanReinstall = false;
+            CanDowngrade = false;
             IgnoreMenuText = string.Empty;
             return;
         }
@@ -2354,6 +2513,10 @@ public partial class MainWindowViewModel : ObservableObject
         CanShowPackageFiles = model.Installed
             && model.Backend is Backend.Pacman or Backend.Aur;
         CanToggleIgnore = model.Installed;
+        CanDownload = model.Backend is Backend.Pacman or Backend.Aur;
+        CanReinstall = model.Installed;
+        CanDowngrade = model.Installed
+            && model.Backend is Backend.Pacman or Backend.Aur;
         IgnoreMenuText = model.Ignored
             ? Loc.T("Cancel ignored updates")
             : Loc.T("Ignore updates");

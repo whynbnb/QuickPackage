@@ -1,0 +1,45 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.DowngradeWindow"
+        x:DataType="vm:DowngradeViewModel"
+        Width="480" Height="420"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="4">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Message}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <Border Grid.Row="1" Classes="pane" ClipToBounds="True">
+      <Grid Margin="10" RowDefinitions="Auto,*" RowSpacing="6">
+        <Grid ColumnDefinitions="*,100,80">
+          <TextBlock Text="{Binding VersionHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="1" Text="{Binding SizeHeader}" Classes="subtle" FontSize="11"/>
+        </Grid>
+        <ListBox Grid.Row="1" ItemsSource="{Binding Items}"
+                 SelectedItem="{Binding Selected, Mode=TwoWay}"
+                 BorderThickness="0" Background="Transparent">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:CachedVersionViewModel">
+              <Grid ColumnDefinitions="*,100,80" ColumnSpacing="8" Margin="0,2">
+                <TextBlock Text="{Binding Version}" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Size}" Classes="subtle"
+                           FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding CurrentText}" Classes="subtle"
+                           FontSize="11" VerticalAlignment="Center"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+      <Button Content="{Binding CancelText}" MinWidth="88" Click="OnCancel"/>
+      <Button Content="{Binding OkText}" MinWidth="88" IsDefault="True" Click="OnOk"
+              IsEnabled="{Binding CanConfirm}"/>
+    </StackPanel>
+  </Grid>
+</Window>

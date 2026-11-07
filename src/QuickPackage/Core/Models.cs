@@ -27,6 +27,8 @@ public enum PackageOperation
     Install,
     Remove,
     Update,
+    Download,
+    Reinstall,
 }
 
 /// <summary>A single package / tool instance. Mutable: the UI updates status in place.</summary>

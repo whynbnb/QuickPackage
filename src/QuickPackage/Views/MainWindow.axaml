@@ -33,6 +33,7 @@
         <MenuItem Header="{Binding L.Snapshots}" Command="{Binding SnapshotsCommand}"/>
         <MenuItem Header="{Binding L.CacheCleanup}" Command="{Binding CacheCleanupCommand}"/>
         <MenuItem Header="{Binding L.History}" Command="{Binding HistoryCommand}"/>
+        <MenuItem Header="{Binding L.InstallLocalPackage}" Click="OnInstallLocalPackage"/>
         <Separator/>
         <MenuItem Header="{Binding UpdatesChipText}" ToggleType="CheckBox"
                   IsChecked="{Binding ShowUpdatesOnly, Mode=TwoWay}"
@@ -229,6 +230,12 @@
                                 CommandParameter="{Binding}" IsVisible="{Binding ShowMakeExplicitAction}"/>
                       <MenuItem Header="{Binding IgnoreText}" Command="{Binding ToggleIgnoreCommand}"
                                 CommandParameter="{Binding}" IsVisible="{Binding ShowInstalledActions}"/>
+                      <MenuItem Header="{Binding DownloadText}" Command="{Binding DownloadCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowDownloadAction}"/>
+                      <MenuItem Header="{Binding ReinstallText}" Command="{Binding ReinstallCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowReinstallAction}"/>
+                      <MenuItem Header="{Binding DowngradeText}" Command="{Binding DowngradeCommand}"
+                                CommandParameter="{Binding}" IsVisible="{Binding ShowDowngradeAction}"/>
                       <Separator/>
                       <MenuItem Header="{Binding CopyNameText}" Command="{Binding CopyNameCommand}"
                                 CommandParameter="{Binding}"/>
@@ -394,6 +401,18 @@
                       <MenuItem Header="{Binding IgnoreMenuText}"
                                 Command="{Binding ToggleIgnoreCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>
+                      <MenuItem Header="{Binding L.DownloadOnly}"
+                                Command="{Binding DownloadPackageCommand}"
+                                CommandParameter="{Binding SelectedPackage}"
+                                IsVisible="{Binding CanDownload}"/>
+                      <MenuItem Header="{Binding L.Reinstall}"
+                                Command="{Binding ReinstallPackageCommand}"
+                                CommandParameter="{Binding SelectedPackage}"
+                                IsVisible="{Binding CanReinstall}"/>
+                      <MenuItem Header="{Binding L.Downgrade}"
+                                Command="{Binding DowngradePackageCommand}"
+                                CommandParameter="{Binding SelectedPackage}"
+                                IsVisible="{Binding CanDowngrade}"/>
                       <MenuItem Header="{Binding L.MakeExplicit}"
                                 Command="{Binding MakeExplicitCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>
