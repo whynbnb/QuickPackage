@@ -18,6 +18,10 @@ public static class HumanSize
         var factor = unit switch
         {
             "b" => 1L,
+            "kb" => 1024L,
+            "mb" => 1024L * 1024,
+            "gb" => 1024L * 1024 * 1024,
+            "tb" => 1024L * 1024 * 1024 * 1024,
             "kib" => 1024L,
             "mib" => 1024L * 1024,
             "gib" => 1024L * 1024 * 1024,

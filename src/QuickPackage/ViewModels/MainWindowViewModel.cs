@@ -156,6 +156,26 @@ public partial class MainWindowViewModel : ObservableObject
         && _selectedChip is ChipKind.Aur or ChipKind.All
         && SearchText.Trim().Length >= 2;
 
+    public bool CanSearchFlatpak =>
+        _flatpakEnabled && !_isDevMode && !IsBusy && !IsSearchingRemote
+        && _selectedChip is ChipKind.Flatpak or ChipKind.All
+        && SearchText.Trim().Length >= 2;
+
+    public bool CanSearchCrates =>
+        _cargoEnabled && !_isDevMode && !IsBusy && !IsSearchingRemote
+        && _selectedChip is ChipKind.Cargo or ChipKind.All
+        && SearchText.Trim().Length >= 2;
+
+    public bool CanSearchOnline => CanSearchAur || CanSearchFlatpak || CanSearchCrates;
+
+    private void NotifySearchAvailability()
+    {
+        OnPropertyChanged(nameof(CanSearchAur));
+        OnPropertyChanged(nameof(CanSearchFlatpak));
+        OnPropertyChanged(nameof(CanSearchCrates));
+        OnPropertyChanged(nameof(CanSearchOnline));
+    }
+
     [ObservableProperty]
     private PackageItemViewModel? _selectedPackage;
 
@@ -501,12 +521,12 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSearchTextChanged(string value)
     {
         ApplyFilter();
-        OnPropertyChanged(nameof(CanSearchAur));
+        NotifySearchAvailability();
         ScheduleAurSearch(value);
     }
 
     partial void OnIsSearchingRemoteChanged(bool value)
-        => OnPropertyChanged(nameof(CanSearchAur));
+        => NotifySearchAvailability();
 
     partial void OnGroupFilterChanged(string value)
     {
@@ -550,7 +570,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanBulkUpdate));
         OnPropertyChanged(nameof(CanBulkInstall));
         OnPropertyChanged(nameof(CanBulkUninstall));
-        OnPropertyChanged(nameof(CanSearchAur));
+        NotifySearchAvailability();
     }
 
     partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanBulkUpdate));
@@ -665,7 +685,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!IsChipVisible(_selectedChip))
             SelectChip(ChipKind.All);
         OnPropertyChanged(nameof(ShowEmpty));
-        OnPropertyChanged(nameof(CanSearchAur));
+        NotifySearchAvailability();
     }
 
     private void SetChipVisible(ChipKind kind, bool visible)
@@ -732,7 +752,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (ShowUpdatesOnly || ShowOrphansOnly)
             SyncFilterSelection();
         UpdateCounters();
-        OnPropertyChanged(nameof(CanSearchAur));
+        NotifySearchAvailability();
         if (kind == ChipKind.Aur)
             ScheduleAurSearch(SearchText);
         else
@@ -844,6 +864,23 @@ public partial class MainWindowViewModel : ObservableObject
 
     [RelayCommand]
     private Task SearchAurAsync()
+        => StartRemoteSearch(Backend.Aur, Loc.T("Searching the AUR…"),
+            (query, token) => _online.SearchAurAsync(query, token));
+
+    [RelayCommand]
+    private Task SearchFlatpakAsync()
+        => StartRemoteSearch(Backend.Flatpak, Loc.T("Searching Flatpak…"),
+            (query, token) => _manager.SearchFlatpakAsync(query, token));
+
+    [RelayCommand]
+    private Task SearchCratesAsync()
+        => StartRemoteSearch(Backend.Cargo, Loc.T("Searching crates.io…"),
+            (query, token) => _online.SearchCratesAsync(query, token));
+
+    private Task StartRemoteSearch(
+        Backend backend,
+        string status,
+        Func<string, CancellationToken, Task<List<Package>>> search)
     {
         var query = SearchText.Trim();
         if (query.Length < 2)
@@ -851,7 +888,7 @@ public partial class MainWindowViewModel : ObservableObject
         CancelRemoteSearch();
         var cts = new CancellationTokenSource();
         _remoteSearchCts = cts;
-        return RunAurSearchAsync(query, cts);
+        return RunRemoteSearchAsync(backend, query, cts, status, search);
     }
 
     private void ScheduleAurSearch(string text)
@@ -873,7 +910,9 @@ public partial class MainWindowViewModel : ObservableObject
             await Task.Delay(700, cts.Token);
             if (cts.IsCancellationRequested)
                 return;
-            await RunAurSearchAsync(query, cts);
+            await RunRemoteSearchAsync(
+                Backend.Aur, query, cts, Loc.T("Searching the AUR…"),
+                (text, token) => _online.SearchAurAsync(text, token));
         }
         catch (OperationCanceledException)
         {
@@ -881,28 +920,35 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private async Task RunAurSearchAsync(string query, CancellationTokenSource cts)
+    private async Task RunRemoteSearchAsync(
+        Backend backend,
+        string query,
+        CancellationTokenSource cts,
+        string status,
+        Func<string, CancellationToken, Task<List<Package>>> search)
     {
         IsSearchingRemote = true;
         try
         {
-            StatusMessage = Loc.T("Searching the AUR…");
-            var results = await _online.SearchAurAsync(query, cts.Token);
+            StatusMessage = status;
+            var results = await search(query, cts.Token);
             if (cts.IsCancellationRequested)
                 return;
-            RemoveRemoteResults(Backend.Aur);
+            RemoveRemoteResults(backend);
             if (_installState == InstallStateFilter.Installed)
                 SetInstallState(InstallStateFilter.All);
 
             var existing = _all
-                .Where(item => item.Model.Backend == Backend.Aur)
-                .Select(item => item.Model.Name)
+                .Where(item => item.Model.Backend == backend)
+                .SelectMany(item => new[] { item.Model.Name, item.Model.EffectiveId })
                 .ToHashSet(StringComparer.OrdinalIgnoreCase);
             var added = 0;
             foreach (var package in results)
             {
-                if (!existing.Add(package.Name))
+                if (existing.Contains(package.Name) || existing.Contains(package.EffectiveId))
                     continue;
+                existing.Add(package.Name);
+                existing.Add(package.EffectiveId);
                 var item = new PackageItemViewModel(package, FilterByGroupCommand);
                 item.PropertyChanged += OnPackagePropertyChanged;
                 _all.Add(item);
@@ -913,7 +959,7 @@ public partial class MainWindowViewModel : ObservableObject
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
-            StatusMessage = Loc.T("Found %1 AUR packages", added);
+            StatusMessage = Loc.T("Found %1 %2 packages", added, BackendInfo.DisplayName(backend));
         }
         catch (OperationCanceledException)
         {

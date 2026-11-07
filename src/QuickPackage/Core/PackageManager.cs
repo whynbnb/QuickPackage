@@ -1072,6 +1072,63 @@ public sealed partial class PackageManager
         return updates;
     }
 
+    // --------------------------------------------------------- remote search
+
+    /// <summary>
+    /// Searches the configured Flatpak remotes for installable apps. The
+    /// remote catalogue is filtered locally after one remote-ls call.
+    /// </summary>
+    public async Task<List<Package>> SearchFlatpakAsync(
+        string query, CancellationToken cancellationToken)
+    {
+        var results = new List<Package>();
+        var text = query.Trim();
+        if (text.Length == 0)
+            return results;
+
+        var run = await RunNetworkAsync(
+            "flatpak",
+            [
+                "remote-ls", "--app",
+                "--columns=application,name,version,origin,description,download-size,installed-size",
+            ],
+            _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak),
+            cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+            return results;
+
+        foreach (var rawLine in run.Output.Split('\n'))
+        {
+            var columns = rawLine.TrimEnd('\r').Split('\t');
+            if (columns.Length == 0 || columns[0].Length == 0)
+                continue;
+            var id = columns[0].Trim();
+            var name = columns.Length > 1 && columns[1].Length > 0 ? columns[1].Trim() : id;
+            var description = columns.Length > 4 ? columns[4].Trim() : string.Empty;
+            if (!id.Contains(text, StringComparison.OrdinalIgnoreCase)
+                && !name.Contains(text, StringComparison.OrdinalIgnoreCase)
+                && !description.Contains(text, StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            results.Add(new Package
+            {
+                PackageId = id,
+                Name = name,
+                Version = columns.Length > 2 ? columns[2].Trim() : string.Empty,
+                Origin = columns.Length > 3 ? columns[3].Trim() : string.Empty,
+                Description = description,
+                DownloadSize = columns.Length > 5 ? columns[5].Trim() : string.Empty,
+                Size = columns.Length > 6 ? columns[6].Trim() : string.Empty,
+                Backend = Backend.Flatpak,
+                Installed = false,
+                RemoteSearch = true,
+            });
+            if (results.Count >= 100)
+                break;
+        }
+        return results;
+    }
+
     // ------------------------------------------------------------- operations
 
     public sealed record PreviewItem(

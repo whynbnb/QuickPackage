@@ -36,6 +36,10 @@ public sealed class LocStrings : ObservableObject
     public string SearchPackages => Loc.T("Search packages…");
     public string SearchAur => Loc.T("Search AUR");
     public string SearchAurHint => Loc.T("Search the AUR by name and description");
+    public string SearchOnline => Loc.T("Online search");
+    public string SearchOnlineHint => Loc.T("Search an online package catalogue for new packages");
+    public string SearchFlatpak => Loc.T("Search Flatpak");
+    public string SearchCrates => Loc.T("Search crates.io");
     public string Refresh => Loc.T("Refresh");
     public string Snapshots => Loc.T("Snapshots");
     public string CacheCleanup => Loc.T("Cache cleanup");
