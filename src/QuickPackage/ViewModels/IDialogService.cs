@@ -13,6 +13,8 @@ public interface IDialogService
 
     Task ShowCacheCleanupAsync(CacheViewModel viewModel);
 
+    Task ShowDiagnosticsAsync(DiagnosticsViewModel viewModel);
+
     Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null);
 }

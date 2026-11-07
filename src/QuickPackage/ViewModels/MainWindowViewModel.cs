@@ -70,6 +70,7 @@ public partial class MainWindowViewModel : ObservableObject
         _languageSetting = _config.GetString("General", "Language", "system");
         LoadBackendSettings();
         ApplyBackendSettings();
+        RefreshBackendHealth();
 
         _isLogExpanded = _config.GetBool("General", "LogPanelExpanded", false);
         _isLogDetailed = _config.GetBool("General", "LogDetails", true);
@@ -195,6 +196,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private bool _isInstalledSelectedPackage;
+
+    [ObservableProperty]
+    private bool _hasBackendIssues;
+
+    [ObservableProperty]
+    private string _backendIssueText = string.Empty;
 
     [ObservableProperty]
     private bool _isLogExpanded;
@@ -1463,6 +1470,7 @@ public partial class MainWindowViewModel : ObservableObject
         var backendsChanged = viewModel.BackendsChanged;
         LoadBackendSettings();
         ApplyBackendSettings();
+        RefreshBackendHealth();
         RefreshModeUi();
         UpdateCounters();
         StatusMessage = _proxy.Url.Length == 0
@@ -1488,6 +1496,27 @@ public partial class MainWindowViewModel : ObservableObject
     {
         var viewModel = new CacheViewModel(_manager);
         await _dialogs.ShowCacheCleanupAsync(viewModel);
+    }
+
+    [RelayCommand]
+    private async Task DiagnosticsAsync()
+    {
+        var viewModel = new DiagnosticsViewModel(_manager.GetDiagnostics());
+        await _dialogs.ShowDiagnosticsAsync(viewModel);
+    }
+
+    /// <summary>Updates the toolbar warning from the enabled backends' tools.</summary>
+    private void RefreshBackendHealth()
+    {
+        var missing = _manager.GetDiagnostics()
+            .Where(item => item.Required && !item.Available)
+            .Select(item => item.Tool)
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
+        HasBackendIssues = missing.Count > 0;
+        BackendIssueText = missing.Count == 0
+            ? string.Empty
+            : Loc.T("Missing required tools: %1", string.Join(", ", missing));
     }
 
     [RelayCommand]
@@ -1695,6 +1724,7 @@ public partial class MainWindowViewModel : ObservableObject
         L.NotifyAll();
         OnPropertyChanged(nameof(GroupFilterText));
         RebuildOriginOptions();
+        RefreshBackendHealth();
         foreach (var item in LogItems)
             item.RefreshLocalization();
         UpdateCounters();

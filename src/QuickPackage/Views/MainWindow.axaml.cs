@@ -205,6 +205,12 @@ public partial class MainWindow : Window, IDialogService
         await dialog.ShowDialog(this);
     }
 
+    public async Task ShowDiagnosticsAsync(DiagnosticsViewModel viewModel)
+    {
+        var dialog = new DiagnosticsWindow { DataContext = viewModel };
+        await dialog.ShowDialog(this);
+    }
+
     public async Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null)
     {

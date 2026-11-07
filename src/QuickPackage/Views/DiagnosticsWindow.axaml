@@ -1,0 +1,54 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.DiagnosticsWindow"
+        x:DataType="vm:DiagnosticsViewModel"
+        Width="720" Height="520"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="2">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <TextBlock Grid.Row="1" Text="{Binding SummaryText}" FontSize="13"
+               Foreground="{DynamicResource SubtleTextBrush}" TextWrapping="Wrap"/>
+
+    <Border Grid.Row="2" Classes="pane" ClipToBounds="True">
+      <Grid Margin="12" RowDefinitions="Auto,*" RowSpacing="6">
+        <Grid ColumnDefinitions="110,150,80,80,*" ColumnSpacing="8">
+          <TextBlock Text="{Binding BackendHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="1" Text="{Binding ToolHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="2" Text="{Binding RequirementHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="3" Text="{Binding StatusHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="4" Text="{Binding PurposeHeader}" Classes="subtle" FontSize="11"/>
+        </Grid>
+        <ListBox Grid.Row="1" ItemsSource="{Binding Rows}" BorderThickness="0"
+                 Background="Transparent"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:DiagnosticRowViewModel">
+              <Grid ColumnDefinitions="110,150,80,80,*" ColumnSpacing="8" Margin="0,2">
+                <TextBlock Text="{Binding BackendText}" FontSize="12" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding Tool}" Classes="mono" FontSize="12"
+                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Grid.Column="2" Text="{Binding RequirementText}" Classes="subtle"
+                           FontSize="11" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="3" Text="{Binding StatusText}"
+                           Foreground="{Binding StatusForeground}" FontSize="12"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="4" Text="{Binding Purpose}" Classes="subtle" FontSize="11"
+                           VerticalAlignment="Center" TextWrapping="Wrap"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <Button Grid.Row="3" Content="{Binding CloseText}" MinWidth="88"
+            HorizontalAlignment="Right" IsDefault="True" Click="OnClose"/>
+  </Grid>
+</Window>

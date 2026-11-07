@@ -94,6 +94,58 @@ public sealed partial class PackageManager
 
     private void Report(string message) => Message?.Invoke(message);
 
+    /// <summary>
+    /// Checks the executables the enabled backends rely on. Missing optional
+    /// tools only disable a sub-feature (cache cleanup/update checks), while
+    /// missing required tools leave the backend unusable.
+    /// </summary>
+    public IReadOnlyList<BackendDiagnostic> GetDiagnostics()
+    {
+        var diagnostics = new List<BackendDiagnostic>();
+
+        void Add(Backend backend, string tool, bool required, string purpose, bool? available = null)
+            => diagnostics.Add(new BackendDiagnostic(
+                backend, tool, required,
+                available ?? CommandRunner.HasExecutable(tool),
+                purpose));
+
+        if (_enabled[Backend.Pacman] || _enabled[Backend.Aur])
+        {
+            Add(Backend.Pacman, "pacman", true, "Package manager");
+            Add(Backend.Pacman, "sudo", true, "Administrator privileges");
+        }
+
+        if (_enabled[Backend.Pacman])
+        {
+            Add(Backend.Pacman, "checkupdates", true, "Package update checks");
+            Add(Backend.Pacman, "paccache", false, "Cache cleanup");
+        }
+
+        if (_enabled[Backend.Aur])
+        {
+            var helper = AurHelper();
+            Add(Backend.Aur, helper ?? "paru / yay", true, "AUR helper", helper is not null);
+        }
+
+        if (_enabled[Backend.Flatpak])
+            Add(Backend.Flatpak, "flatpak", true, "Flatpak support");
+
+        if (_enabled[Backend.Cargo])
+        {
+            Add(Backend.Cargo, "cargo", true, "Cargo support");
+            Add(Backend.Cargo, "cargo-install-update", true, "Cargo update checks");
+        }
+
+        if (_enabled[Backend.Mise])
+            Add(Backend.Mise, "mise", true, "Developer tool support");
+        if (_enabled[Backend.Rustup])
+            Add(Backend.Rustup, "rustup", true, "Developer tool support");
+        if (_enabled[Backend.Fvm])
+            Add(Backend.Fvm, "fvm", true, "Developer tool support");
+
+        return diagnostics;
+    }
+
     // ---------------------------------------------------------------- queries
 
     public enum CacheCleanMode
