@@ -373,8 +373,6 @@ public partial class MainWindowViewModel : ObservableObject
         ? Loc.T("Exit selection")
         : Loc.T("Select");
 
-    public string ListHeaderText => Loc.T("%1 packages", Packages.Count);
-
     public bool HasActiveFilters =>
         SearchText.Length > 0
         || GroupFilter.Length > 0
@@ -408,9 +406,6 @@ public partial class MainWindowViewModel : ObservableObject
                 ? UpdatesChipText
                 : ShowOrphansOnly ? OrphansChipText : string.Empty;
     }
-
-    [RelayCommand]
-    private void ExitSelection() => IsSelectionMode = false;
 
     [RelayCommand]
     private void ClearFilters()
@@ -1013,7 +1008,6 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var item in filtered)
             Packages.Add(item);
         OnPropertyChanged(nameof(ShowEmpty));
-        OnPropertyChanged(nameof(ListHeaderText));
     }
 
     private int ComparePackages(PackageItemViewModel left, PackageItemViewModel right)

@@ -30,11 +30,11 @@ C# 14 and Avalonia.
 - **Package origin filter** with every repository present in the current
   backend and install-state scope, so e.g. selecting Pacman only offers the
   pacman repositories rather than AUR, Flatpak or cargo origins
-- **Multi-select mode** for batch install/uninstall, with a contextual
-  action bar in the list (selected count, select-all, clear, install,
-  uninstall) in addition to the update and orphan bulk actions; a
-  **Clear filters** action resets the search, install state, origin,
-  group, update/orphan filters and exits multi-select
+- **Multi-select mode** for batch install/uninstall: the checkboxes appear
+  on list rows and the selected count, select-all, clear, install and
+  uninstall actions sit beside the search field, so they never take a row
+  away from the list; a **Clear filters** action resets the search, install
+  state, origin, group, update/orphan filters and exits multi-select
 - **Sorting** by name, installed/download size, install date, build date,
   origin or update status, with a remembered direction
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
