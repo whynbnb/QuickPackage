@@ -412,20 +412,36 @@ public partial class MainWindowViewModel : ObservableObject
             chip.IsChecked = chip.Kind == kind;
         _suppressChipEvents = false;
         ApplyFilter();
+        // Narrowing the backend also narrows the bulk selection, otherwise
+        // hidden rows of other backends would still be updated/removed and
+        // inflate the toolbar counts.
+        if (ShowUpdatesOnly || ShowOrphansOnly)
+            SyncFilterSelection();
+        UpdateCounters();
     }
 
     // --------------------------------------------------------------- filtering
 
+    /// <summary>True when the item belongs to the currently selected backend chip.</summary>
+    private bool MatchesChip(PackageItemViewModel item)
+        => _selectedChip == ChipKind.All || (Backend)_selectedChip == item.Model.Backend;
+
+    /// <summary>True when the item is both in the active mode and under the selected chip.</summary>
+    private bool MatchesScope(PackageItemViewModel item)
+        => MatchesChip(item) && BackendInfo.IsDev(item.Model.Backend) == _isDevMode;
+
     /// <summary>
     /// Shows checkboxes only on rows the active filter can act on and checks
-    /// them all; turning the filter off clears the selection again.
+    /// them all; rows outside the selected backend are left alone so bulk
+    /// actions only ever touch what is currently visible.
     /// </summary>
     private void SyncFilterSelection()
     {
         foreach (var item in _all)
         {
-            var selectable = (ShowUpdatesOnly && item.Model.Status == PackageStatus.NeedsUpdate)
-                || (ShowOrphansOnly && item.Model.Orphan);
+            var selectable = MatchesScope(item)
+                && ((ShowUpdatesOnly && item.Model.Status == PackageStatus.NeedsUpdate)
+                    || (ShowOrphansOnly && item.Model.Orphan));
             item.ShowSelection = selectable;
             item.IsSelected = selectable;
         }
@@ -482,9 +498,12 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var item in _all)
         {
             var model = item.Model;
-            if (model.Selected)
+            // Only rows the user can currently see take part in selection
+            // counts; hidden backends must not leak into the toolbar.
+            var inScope = MatchesScope(item);
+            if (model.Selected && inScope)
                 ++selected;
-            if (model.Orphan)
+            if (model.Orphan && inScope)
                 ++orphans;
             var needsUpdate = model.Status == PackageStatus.NeedsUpdate;
             if (needsUpdate)
@@ -542,11 +561,16 @@ public partial class MainWindowViewModel : ObservableObject
         SetChipLabel(ChipKind.Rustup, ChipText(Loc.T("Rustup"), rustup, CountUpdates(Backend.Rustup)));
         SetChipLabel(ChipKind.Fvm, ChipText(Loc.T("FVM"), fvm, CountUpdates(Backend.Fvm)));
 
-        UpdatesChipText = Loc.T("Updates (%1)", totalUpdates);
+        // The updates/orphans filter chips describe the current backend scope.
+        var scopedUpdates = _selectedChip == ChipKind.All
+            ? (_isDevMode ? devUpdates : totalUpdates - devUpdates)
+            : CountUpdates((Backend)_selectedChip);
+
+        UpdatesChipText = Loc.T("Updates (%1)", scopedUpdates);
         UpdateSelectedText = Loc.T("Update Selected (%1)", selected);
         RemoveSelectedText = Loc.T("Remove Selected (%1)", selected);
         OrphansChipText = Loc.T("Orphans (%1)", orphans);
-        HasUpdates = totalUpdates > 0;
+        HasUpdates = scopedUpdates > 0;
         if (!HasUpdates && ShowUpdatesOnly)
             ShowUpdatesOnly = false;
         HasOrphans = orphans > 0;
@@ -774,7 +798,9 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task UpdateSelectedAsync()
     {
         var packages = _all
-            .Where(item => item.Model.Selected && item.Model.Status == PackageStatus.NeedsUpdate)
+            .Where(item => MatchesScope(item)
+                && item.Model.Selected
+                && item.Model.Status == PackageStatus.NeedsUpdate)
             .Select(item => item.Model)
             .ToList();
         if (packages.Count == 0)
@@ -794,7 +820,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task RemoveSelectedOrphansAsync()
     {
         var packages = _all
-            .Where(item => item.Model.Selected && item.Model.Orphan)
+            .Where(item => MatchesScope(item) && item.Model.Selected && item.Model.Orphan)
             .Select(item => item.Model)
             .ToList();
         if (packages.Count == 0)
