@@ -34,6 +34,8 @@ public sealed class LocStrings : ObservableObject
     public string SystemPackages => Loc.T("System packages");
     public string DeveloperPackages => Loc.T("Developer packages");
     public string SearchPackages => Loc.T("Search packages…");
+    public string SearchAur => Loc.T("Search AUR");
+    public string SearchAurHint => Loc.T("Search the AUR by name and description");
     public string Refresh => Loc.T("Refresh");
     public string Snapshots => Loc.T("Snapshots");
     public string CacheCleanup => Loc.T("Cache cleanup");

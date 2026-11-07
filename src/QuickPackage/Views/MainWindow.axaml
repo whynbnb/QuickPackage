@@ -54,8 +54,15 @@
                       IsVisible="{Binding HasDevBackends}"/>
       </StackPanel>
 
-      <TextBox Grid.Column="1" Text="{Binding SearchText, Mode=TwoWay}"
-               PlaceholderText="{Binding L.SearchPackages}" VerticalAlignment="Center"/>
+      <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+        <TextBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay}"
+                 PlaceholderText="{Binding L.SearchPackages}" VerticalAlignment="Center"/>
+        <Button Grid.Column="1" Classes="toolbar" Content="{Binding L.SearchAur}"
+                Command="{Binding SearchAurCommand}"
+                IsVisible="{Binding CanSearchAur}"
+                IsEnabled="{Binding CanSearchAur}"
+                ToolTip.Tip="{Binding L.SearchAurHint}"/>
+      </Grid>
 
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
         <Button Classes="toolbar" Content="{Binding L.Refresh}"

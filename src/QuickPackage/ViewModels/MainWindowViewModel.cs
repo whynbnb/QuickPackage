@@ -21,6 +21,7 @@ public partial class MainWindowViewModel : ObservableObject
     private readonly Config _config;
     private readonly ProxySettings _proxy = new();
     private readonly PackageManager _manager = new();
+    private readonly OnlineService _online;
     private readonly List<PackageItemViewModel> _all = [];
     private readonly Dictionary<ChipKind, ChipViewModel> _chipByKind = [];
     private readonly Dictionary<string, string> _descriptionCache = new(StringComparer.Ordinal);
@@ -42,6 +43,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isDevMode;
     private ChipKind _selectedChip = ChipKind.All;
     private CancellationTokenSource? _operationCts;
+    private CancellationTokenSource? _remoteSearchCts;
 
     // Detail-pane navigation history (dependency links and list selections).
     private readonly List<PackageItemViewModel> _navigation = [];
@@ -61,6 +63,7 @@ public partial class MainWindowViewModel : ObservableObject
         _dialogs = dialogs;
         _config = Config.Load();
         _proxy.Load(_config);
+        _online = new OnlineService(_proxy);
 
         // Sudo needs a password when no ticket is cached; the manager asks
         // back through this callback so the prompt lives in the UI.
@@ -144,6 +147,14 @@ public partial class MainWindowViewModel : ObservableObject
     /// <summary>Shows checkboxes on every visible row for batch install/remove.</summary>
     [ObservableProperty]
     private bool _isSelectionMode;
+
+    [ObservableProperty]
+    private bool _isSearchingRemote;
+
+    public bool CanSearchAur =>
+        _aurEnabled && !_isDevMode && !IsBusy && !IsSearchingRemote
+        && _selectedChip is ChipKind.Aur or ChipKind.All
+        && SearchText.Trim().Length >= 2;
 
     [ObservableProperty]
     private PackageItemViewModel? _selectedPackage;
@@ -487,7 +498,15 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(AllOriginsLabel));
     }
 
-    partial void OnSearchTextChanged(string value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value)
+    {
+        ApplyFilter();
+        OnPropertyChanged(nameof(CanSearchAur));
+        ScheduleAurSearch(value);
+    }
+
+    partial void OnIsSearchingRemoteChanged(bool value)
+        => OnPropertyChanged(nameof(CanSearchAur));
 
     partial void OnGroupFilterChanged(string value)
     {
@@ -531,6 +550,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(CanBulkUpdate));
         OnPropertyChanged(nameof(CanBulkInstall));
         OnPropertyChanged(nameof(CanBulkUninstall));
+        OnPropertyChanged(nameof(CanSearchAur));
     }
 
     partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanBulkUpdate));
@@ -645,6 +665,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!IsChipVisible(_selectedChip))
             SelectChip(ChipKind.All);
         OnPropertyChanged(nameof(ShowEmpty));
+        OnPropertyChanged(nameof(CanSearchAur));
     }
 
     private void SetChipVisible(ChipKind kind, bool visible)
@@ -711,6 +732,11 @@ public partial class MainWindowViewModel : ObservableObject
         if (ShowUpdatesOnly || ShowOrphansOnly)
             SyncFilterSelection();
         UpdateCounters();
+        OnPropertyChanged(nameof(CanSearchAur));
+        if (kind == ChipKind.Aur)
+            ScheduleAurSearch(SearchText);
+        else
+            CancelRemoteSearch();
     }
 
     // --------------------------------------------------------------- filtering
@@ -813,6 +839,117 @@ public partial class MainWindowViewModel : ObservableObject
             DateTimeStyles.AllowWhiteSpaces, out var date)
             ? date
             : DateTime.MinValue;
+
+    // --------------------------------------------------------- remote search
+
+    [RelayCommand]
+    private Task SearchAurAsync()
+    {
+        var query = SearchText.Trim();
+        if (query.Length < 2)
+            return Task.CompletedTask;
+        CancelRemoteSearch();
+        var cts = new CancellationTokenSource();
+        _remoteSearchCts = cts;
+        return RunAurSearchAsync(query, cts);
+    }
+
+    private void ScheduleAurSearch(string text)
+    {
+        CancelRemoteSearch();
+        var query = text.Trim();
+        if (!_aurEnabled || _isDevMode || _selectedChip != ChipKind.Aur || query.Length < 2)
+            return;
+
+        var cts = new CancellationTokenSource();
+        _remoteSearchCts = cts;
+        _ = DebouncedAurSearchAsync(query, cts);
+    }
+
+    private async Task DebouncedAurSearchAsync(string query, CancellationTokenSource cts)
+    {
+        try
+        {
+            await Task.Delay(700, cts.Token);
+            if (cts.IsCancellationRequested)
+                return;
+            await RunAurSearchAsync(query, cts);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer query replaced this one.
+        }
+    }
+
+    private async Task RunAurSearchAsync(string query, CancellationTokenSource cts)
+    {
+        IsSearchingRemote = true;
+        try
+        {
+            StatusMessage = Loc.T("Searching the AUR…");
+            var results = await _online.SearchAurAsync(query, cts.Token);
+            if (cts.IsCancellationRequested)
+                return;
+            RemoveRemoteResults(Backend.Aur);
+            if (_installState == InstallStateFilter.Installed)
+                SetInstallState(InstallStateFilter.All);
+
+            var existing = _all
+                .Where(item => item.Model.Backend == Backend.Aur)
+                .Select(item => item.Model.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+            var added = 0;
+            foreach (var package in results)
+            {
+                if (!existing.Add(package.Name))
+                    continue;
+                var item = new PackageItemViewModel(package, FilterByGroupCommand);
+                item.PropertyChanged += OnPackagePropertyChanged;
+                _all.Add(item);
+                ++added;
+            }
+
+            RebuildOriginOptions();
+            ApplyFilter();
+            SyncFilterSelection();
+            UpdateCounters();
+            StatusMessage = Loc.T("Found %1 AUR packages", added);
+        }
+        catch (OperationCanceledException)
+        {
+            // A newer query replaced this one.
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            if (ReferenceEquals(_remoteSearchCts, cts))
+                _remoteSearchCts = null;
+            cts.Dispose();
+            IsSearchingRemote = false;
+        }
+    }
+
+    private void CancelRemoteSearch()
+    {
+        _remoteSearchCts?.Cancel();
+        _remoteSearchCts = null;
+        IsSearchingRemote = false;
+    }
+
+    private void RemoveRemoteResults(Backend backend)
+    {
+        for (var i = _all.Count - 1; i >= 0; --i)
+        {
+            var item = _all[i];
+            if (!item.Model.RemoteSearch || item.Model.Backend != backend)
+                continue;
+            item.PropertyChanged -= OnPackagePropertyChanged;
+            _all.RemoveAt(i);
+        }
+    }
 
     private bool Accepts(PackageItemViewModel item)
     {
@@ -1002,6 +1139,7 @@ public partial class MainWindowViewModel : ObservableObject
         BeginBusy();
         var cts = new CancellationTokenSource();
         _operationCts = cts;
+        CancelRemoteSearch();
         StatusMessage = Loc.T("Loading package lists…");
         try
         {
@@ -1940,6 +2078,21 @@ public partial class MainWindowViewModel : ObservableObject
         Add(Loc.T("Packager:"), model.Packager);
         if (model.Url.Length > 0)
             DetailFields.Add(DetailFieldViewModel.Link(Loc.T("URL:"), model.Url));
+        if (model.Backend == Backend.Aur)
+        {
+            DetailFields.Add(DetailFieldViewModel.Link(
+                Loc.T("AUR page:"), "https://aur.archlinux.org/packages/" + Uri.EscapeDataString(model.Name)));
+            if (model.RemoteSearch)
+            {
+                DetailFields.Add(DetailFieldViewModel.Plain(Loc.T("Votes:"), model.Votes.ToString()));
+                DetailFields.Add(DetailFieldViewModel.Plain(
+                    Loc.T("Popularity:"), model.Popularity.ToString("0.##", CultureInfo.InvariantCulture)));
+                Add(Loc.T("Maintainer:"), model.Maintainer);
+                if (model.OutOfDate)
+                    DetailFields.Add(DetailFieldViewModel.Plain(
+                        Loc.T("Status:"), Loc.T("Flagged out of date")));
+            }
+        }
         Add(Loc.T("Licenses:"), model.Licenses);
         Add(Loc.T("Provides:"), model.Provides);
         Add(Loc.T("Optional deps:"), model.OptionalDeps);
@@ -2100,5 +2253,6 @@ public partial class MainWindowViewModel : ObservableObject
         _manager.SetQueryTimeout(_config.GetInt("General", "CommandTimeout", 30));
         _manager.SetDownloadTimeout(_config.GetInt("General", "DownloadTimeout", 3600));
         _manager.SetNetworkRetries(_config.GetInt("General", "NetworkRetries", 2));
+        _online.SetProxy(_proxy);
     }
 }

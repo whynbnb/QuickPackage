@@ -59,6 +59,15 @@ public sealed class Package
     public bool Installed { get; set; }
     public bool Selected { get; set; }
 
+    /// <summary>Entry added by an on-demand remote search, not the local index.</summary>
+    public bool RemoteSearch { get; set; }
+
+    /// <summary>AUR metadata returned by the RPC search.</summary>
+    public string Maintainer { get; set; } = string.Empty;
+    public int Votes { get; set; }
+    public double Popularity { get; set; }
+    public bool OutOfDate { get; set; }
+
     /// <summary>Foreign (AUR/local) pacman package: installed but absent from the sync repos.</summary>
     public bool Foreign { get; set; }
 
