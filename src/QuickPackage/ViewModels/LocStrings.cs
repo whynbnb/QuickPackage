@@ -25,6 +25,10 @@ public sealed class LocStrings : ObservableObject
     public string CheckForUpdates => Loc.T("Check for Updates");
     public string InstallSelected => Loc.T("Install Selected");
     public string RemoveSelected => Loc.T("Remove Selected");
+    public string Select => Loc.T("Select");
+    public string SelectAll => Loc.T("Select all");
+    public string ClearSelection => Loc.T("Clear selection");
+    public string SelectPackagesHint => Loc.T("Show checkboxes and batch install or uninstall the selected packages");
     public string Preferences => Loc.T("Preferences…");
 
     public string SystemPackages => Loc.T("System packages");

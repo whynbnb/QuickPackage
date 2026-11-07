@@ -140,6 +140,10 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _showOrphansOnly;
 
+    /// <summary>Shows checkboxes on every visible row for batch install/remove.</summary>
+    [ObservableProperty]
+    private bool _isSelectionMode;
+
     [ObservableProperty]
     private PackageItemViewModel? _selectedPackage;
 
@@ -160,6 +164,18 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private string _removeSelectedText = string.Empty;
+
+    [ObservableProperty]
+    private string _installSelectedText = string.Empty;
+
+    [ObservableProperty]
+    private string _uninstallSelectedText = string.Empty;
+
+    [ObservableProperty]
+    private bool _hasInstallSelection;
+
+    [ObservableProperty]
+    private bool _hasUninstallSelection;
 
     [ObservableProperty]
     private string _orphansChipText = string.Empty;
@@ -241,6 +257,14 @@ public partial class MainWindowViewModel : ObservableObject
     public bool ShowLogContext => IsLogDetailed && LogContext is not null;
 
     public bool CanBulkUpdate => HasSelection && !IsBusy;
+
+    public bool CanBulkInstall => HasInstallSelection && !IsBusy;
+
+    public bool CanBulkUninstall => HasUninstallSelection && !IsBusy;
+
+    public bool ShowBulkInstall => IsSelectionMode && HasInstallSelection;
+
+    public bool ShowBulkUninstall => IsSelectionMode && HasUninstallSelection;
 
     public bool CanGoBack => _navigationIndex > 0;
 
@@ -431,13 +455,40 @@ public partial class MainWindowViewModel : ObservableObject
         ApplyFilter();
     }
 
+    partial void OnIsSelectionModeChanged(bool value)
+    {
+        if (!value)
+        {
+            foreach (var item in _all)
+                item.IsSelected = false;
+        }
+        SyncFilterSelection();
+        UpdateCounters();
+        OnPropertyChanged(nameof(ShowBulkInstall));
+        OnPropertyChanged(nameof(ShowBulkUninstall));
+    }
+
     partial void OnIsBusyChanged(bool value)
     {
         OnPropertyChanged(nameof(IsNotBusy));
         OnPropertyChanged(nameof(CanBulkUpdate));
+        OnPropertyChanged(nameof(CanBulkInstall));
+        OnPropertyChanged(nameof(CanBulkUninstall));
     }
 
     partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanBulkUpdate));
+
+    partial void OnHasInstallSelectionChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanBulkInstall));
+        OnPropertyChanged(nameof(ShowBulkInstall));
+    }
+
+    partial void OnHasUninstallSelectionChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanBulkUninstall));
+        OnPropertyChanged(nameof(ShowBulkUninstall));
+    }
 
     partial void OnSelectedPackageChanged(PackageItemViewModel? value)
     {
@@ -624,13 +675,19 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void SyncFilterSelection()
     {
+        var filtered = ShowUpdatesOnly || ShowOrphansOnly;
         foreach (var item in _all)
         {
-            var selectable = MatchesScope(item)
+            var inScope = MatchesScope(item);
+            var selectable = filtered
+                && inScope
                 && ((ShowUpdatesOnly && item.Model.Status == PackageStatus.NeedsUpdate)
                     || (ShowOrphansOnly && item.Model.Orphan));
-            item.ShowSelection = selectable;
-            item.IsSelected = selectable;
+            item.ShowSelection = IsSelectionMode ? inScope : selectable;
+            if (filtered)
+                item.IsSelected = selectable;
+            else if (!IsSelectionMode)
+                item.IsSelected = false;
         }
     }
 
@@ -714,6 +771,7 @@ public partial class MainWindowViewModel : ObservableObject
     {
         int pacman = 0, aur = 0, flatpak = 0, cargo = 0, mise = 0, rustup = 0, fvm = 0;
         int pacmanUpdates = 0, aurUpdates = 0, devUpdates = 0, totalUpdates = 0, selected = 0, orphans = 0;
+        int selectedInstall = 0, selectedRemove = 0;
 
         foreach (var item in _all)
         {
@@ -726,7 +784,13 @@ public partial class MainWindowViewModel : ObservableObject
             // counts; hidden backends must not leak into the toolbar.
             var inScope = MatchesScope(item);
             if (model.Selected && inScope)
+            {
                 ++selected;
+                if (model.Installed)
+                    ++selectedRemove;
+                else
+                    ++selectedInstall;
+            }
             if (model.Orphan && inScope)
                 ++orphans;
             var needsUpdate = model.Status == PackageStatus.NeedsUpdate;
@@ -794,6 +858,10 @@ public partial class MainWindowViewModel : ObservableObject
         UpdatesChipText = Loc.T("Updates (%1)", scopedUpdates);
         UpdateSelectedText = Loc.T("Update Selected (%1)", selected);
         RemoveSelectedText = Loc.T("Remove Selected (%1)", selected);
+        InstallSelectedText = Loc.T("Install Selected (%1)", selectedInstall);
+        UninstallSelectedText = Loc.T("Uninstall Selected (%1)", selectedRemove);
+        HasInstallSelection = selectedInstall > 0;
+        HasUninstallSelection = selectedRemove > 0;
         OrphansChipText = Loc.T("Orphans (%1)", orphans);
         HasUpdates = scopedUpdates > 0;
         if (!HasUpdates && ShowUpdatesOnly)
@@ -1327,6 +1395,59 @@ public partial class MainWindowViewModel : ObservableObject
 
         await RefreshAsync();
         await CheckUpdatesAsync();
+    }
+
+    [RelayCommand]
+    private void SelectAllVisible()
+    {
+        foreach (var item in Packages)
+        {
+            if (item.ShowSelection)
+                item.IsSelected = true;
+        }
+    }
+
+    [RelayCommand]
+    private void ClearSelected()
+    {
+        foreach (var item in _all)
+            item.IsSelected = false;
+    }
+
+    [RelayCommand]
+    private async Task InstallSelectedAsync()
+    {
+        var packages = _all
+            .Where(item => MatchesScope(item) && item.Model.Selected && !item.Model.Installed)
+            .Select(item => item.Model)
+            .ToList();
+        if (packages.Count == 0)
+            return;
+        var names = string.Join(", ", packages.Select(package => package.Name));
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Install, packages, Loc.T("Install Packages"),
+            Loc.Tn("Install the following package?", "Install the following %1 packages?",
+                packages.Count, packages.Count) + "\n\n" + names);
+        if (confirmed)
+            await RunOperationAsync(PackageOperation.Install, packages);
+    }
+
+    [RelayCommand]
+    private async Task UninstallSelectedAsync()
+    {
+        var packages = _all
+            .Where(item => MatchesScope(item) && item.Model.Selected && item.Model.Installed)
+            .Select(item => item.Model)
+            .ToList();
+        if (packages.Count == 0)
+            return;
+        var names = string.Join(", ", packages.Select(package => package.Name));
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Remove, packages, Loc.T("Uninstall Packages"),
+            Loc.Tn("Uninstall the following package?", "Uninstall the following %1 packages?",
+                packages.Count, packages.Count) + "\n\n" + names);
+        if (confirmed)
+            await RunOperationAsync(PackageOperation.Remove, packages);
     }
 
     [RelayCommand]

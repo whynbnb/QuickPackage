@@ -66,6 +66,23 @@
                 ToolTip.Tip="{Binding BackendIssueText}"/>
       </StackPanel>
       <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
+        <ToggleButton Classes="chip" Content="{Binding L.Select}"
+                      IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
+                      ToolTip.Tip="{Binding L.SelectPackagesHint}"/>
+        <Button Classes="ghost" Content="{Binding L.SelectAll}"
+                Command="{Binding SelectAllVisibleCommand}"
+                IsVisible="{Binding IsSelectionMode}" FontSize="11" Padding="8,2"/>
+        <Button Classes="ghost" Content="{Binding L.ClearSelection}"
+                Command="{Binding ClearSelectedCommand}"
+                IsVisible="{Binding IsSelectionMode}" FontSize="11" Padding="8,2"/>
+        <Button Classes="toolbar" Content="{Binding InstallSelectedText}"
+                Command="{Binding InstallSelectedCommand}"
+                IsVisible="{Binding ShowBulkInstall}"
+                IsEnabled="{Binding CanBulkInstall}"/>
+        <Button Classes="toolbar danger" Content="{Binding UninstallSelectedText}"
+                Command="{Binding UninstallSelectedCommand}"
+                IsVisible="{Binding ShowBulkUninstall}"
+                IsEnabled="{Binding CanBulkUninstall}"/>
         <Button Classes="toolbar" Content="{Binding L.Snapshots}"
                 Command="{Binding SnapshotsCommand}"/>
         <Button Classes="toolbar" Content="{Binding L.CacheCleanup}"
