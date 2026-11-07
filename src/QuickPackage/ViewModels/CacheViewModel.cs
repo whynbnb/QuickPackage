@@ -54,6 +54,9 @@ public partial class CacheViewModel : ObservableObject
     private bool _hasAurHelper;
 
     [ObservableProperty]
+    private bool _hasFlatpak;
+
+    [ObservableProperty]
     private bool _hasPacmanEntries;
 
     [ObservableProperty]
@@ -79,6 +82,9 @@ public partial class CacheViewModel : ObservableObject
     public string Subtitle => Loc.T("Clean the local package caches used by pacman and the AUR helper.");
     public string PacmanSection => Loc.T("pacman cache");
     public string AurSection => Loc.T("AUR helper cache");
+    public string FlatpakSection => Loc.T("Flatpak runtimes");
+    public string FlatpakHint => Loc.T("Remove runtimes that are no longer needed by any installed Flatpak application.");
+    public string CleanFlatpakText => Loc.T("Remove unused runtimes");
     public string CleanUninstalledText => Loc.T("Clean uninstalled versions");
     public string KeepLatestText => Loc.T("Keep only the latest version");
     public string CleanAllText => Loc.T("Clean all");
@@ -113,6 +119,7 @@ public partial class CacheViewModel : ObservableObject
             AurSize = usage.AurSize;
             HasPaccache = usage.HasPaccache;
             HasAurHelper = usage.AurHelper.Length > 0;
+            HasFlatpak = CommandRunner.HasExecutable("flatpak");
 
             var installed = await _manager.GetInstalledVersionsAsync(CancellationToken.None);
             LoadPacmanContents(installed);
@@ -133,6 +140,9 @@ public partial class CacheViewModel : ObservableObject
 
     public Task CleanAurAsync(bool all)
         => RunAsync(() => _manager.CleanAurCacheAsync(all, CancellationToken.None));
+
+    public Task CleanFlatpakAsync()
+        => RunAsync(() => _manager.CleanFlatpakUnusedAsync(CancellationToken.None));
 
     private async Task RunAsync(Func<Task<CommandRunner.Result>> action)
     {

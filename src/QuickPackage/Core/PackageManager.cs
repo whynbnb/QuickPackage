@@ -270,6 +270,19 @@ public sealed partial class PackageManager
         return run;
     }
 
+    /// <summary>Removes Flatpak runtimes no installed application needs.</summary>
+    public async Task<CommandRunner.Result> CleanFlatpakUnusedAsync(
+        CancellationToken cancellationToken)
+    {
+        Report(Loc.T("Removing unused Flatpak runtimes…"));
+        var run = await RunNetworkAsync(
+            "flatpak", ["uninstall", "--unused", "-y"],
+            _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak),
+            cancellationToken, operation: true).ConfigureAwait(false);
+        Report(run.Ok ? Loc.T("Unused runtimes removed") : Loc.T("Failed: %1", "Flatpak"));
+        return run;
+    }
+
     /// <summary>
     /// Downloads fresh repository metadata. This is kept separate from the
     /// list reload because a partial upgrade (sync without upgrading) is

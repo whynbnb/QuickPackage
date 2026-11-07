@@ -87,6 +87,19 @@ public partial class CacheWindow : Window
         }
     }
 
+    private async void OnCleanFlatpak(object? sender, RoutedEventArgs e)
+    {
+        if (ViewModel is not { } viewModel)
+            return;
+        if (await ConfirmAsync(
+                Loc.T("Remove unused runtimes"),
+                Loc.T("Remove Flatpak runtimes that no installed application needs?"),
+                Loc.T("OK"), Loc.T("Cancel")))
+        {
+            await viewModel.CleanFlatpakAsync();
+        }
+    }
+
     private async void OnRefresh(object? sender, RoutedEventArgs e)
     {
         if (ViewModel is { } viewModel)
