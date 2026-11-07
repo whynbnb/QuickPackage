@@ -2467,7 +2467,7 @@ public partial class MainWindowViewModel : ObservableObject
         var buildTime = assembly.Location.Length > 0 && File.Exists(assembly.Location)
             ? File.GetLastWriteTime(assembly.Location).ToString("yyyy-MM-dd HH:mm")
             : "—";
-        var text = $"{Loc.T("QuickPackage")} 0.4.0\n"
+        var text = $"{Loc.T("QuickPackage")} 0.5.0\n"
             + Loc.T("A package manager for pacman, Flatpak, cargo and AUR")
             + "\n\n"
             + Loc.T("Build: %1", buildTime) + "\n"
