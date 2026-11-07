@@ -26,6 +26,9 @@
           <SolidColorBrush x:Key="PrimaryBorderBrush" Color="#B9D3FB"/>
           <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#EAF2FE"/>
           <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#DCE9FD"/>
+          <SolidColorBrush x:Key="GroupBrush" Color="#2F7A74"/>
+          <SolidColorBrush x:Key="GroupBorderBrush" Color="#B9DCD7"/>
+          <SolidColorBrush x:Key="GroupBackgroundBrush" Color="#EAF6F4"/>
         </ResourceDictionary>
         <ResourceDictionary x:Key="Dark">
           <SolidColorBrush x:Key="AppBackgroundBrush" Color="#1B1C1F"/>
@@ -44,6 +47,9 @@
           <SolidColorBrush x:Key="PrimaryBorderBrush" Color="#3C5A85"/>
           <SolidColorBrush x:Key="PrimaryBackgroundBrush" Color="#243247"/>
           <SolidColorBrush x:Key="PrimaryHoverBrush" Color="#2C3D57"/>
+          <SolidColorBrush x:Key="GroupBrush" Color="#8AD4CC"/>
+          <SolidColorBrush x:Key="GroupBorderBrush" Color="#35564F"/>
+          <SolidColorBrush x:Key="GroupBackgroundBrush" Color="#213330"/>
         </ResourceDictionary>
       </ResourceDictionary.ThemeDictionaries>
     </ResourceDictionary>

@@ -153,6 +153,26 @@
                             <TextBlock Text="{Binding OrphanText}" FontSize="11"
                                        Foreground="{DynamicResource DangerBrush}"/>
                           </Border>
+                          <ItemsControl ItemsSource="{Binding Groups}"
+                                        IsVisible="{Binding HasGroups}"
+                                        VerticalAlignment="Center">
+                            <ItemsControl.ItemsPanel>
+                              <ItemsPanelTemplate>
+                                <WrapPanel/>
+                              </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                            <ItemsControl.ItemTemplate>
+                              <DataTemplate x:DataType="x:String">
+                                <Border Classes="pill tag" Margin="0,1,6,1"
+                                        VerticalAlignment="Center"
+                                        Background="{DynamicResource GroupBackgroundBrush}"
+                                        BorderBrush="{DynamicResource GroupBorderBrush}">
+                                  <TextBlock Text="{Binding}" FontSize="11"
+                                             Foreground="{DynamicResource GroupBrush}"/>
+                                </Border>
+                              </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                          </ItemsControl>
                         </StackPanel>
                         <TextBlock Grid.Column="1" Text="{Binding Subtitle}" Classes="subtle" FontSize="13"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center"

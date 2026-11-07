@@ -9,6 +9,8 @@ public partial class PackageItemViewModel : ObservableObject
 {
     private static readonly Dictionary<(uint, byte), IBrush> BrushCache = [];
 
+    private IReadOnlyList<string>? _groups;
+
     public Package Model { get; }
 
     public PackageItemViewModel(Package model)
@@ -73,6 +75,16 @@ public partial class PackageItemViewModel : ObservableObject
     public bool ShowOrphan => Model.Orphan;
 
     public string OrphanText => Loc.T("Orphan");
+
+    /// <summary>Pacman package groups, shown as pills in the list and detail pane.</summary>
+    public IReadOnlyList<string> Groups => _groups ??= Model.Groups
+        .Split([' ', '\t'], StringSplitOptions.RemoveEmptyEntries)
+        .Distinct(StringComparer.Ordinal)
+        .ToList();
+
+    public bool HasGroups => Groups.Count > 0;
+
+    public string GroupsText => string.Join(", ", Groups);
 
     public IBrush ReasonBackground
     {
@@ -265,6 +277,10 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(InstallReasonText));
         OnPropertyChanged(nameof(ShowOrphan));
         OnPropertyChanged(nameof(OrphanText));
+        _groups = null;
+        OnPropertyChanged(nameof(Groups));
+        OnPropertyChanged(nameof(HasGroups));
+        OnPropertyChanged(nameof(GroupsText));
         OnPropertyChanged(nameof(ReasonBackground));
         OnPropertyChanged(nameof(ReasonBorderBrush));
         OnPropertyChanged(nameof(ReasonForeground));

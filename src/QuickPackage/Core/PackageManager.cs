@@ -447,10 +447,16 @@ public sealed partial class PackageManager
                 case "origin": package.Origin += " " + value; break;
                 case "size": package.Size += " " + value; break;
                 case "date": package.InstallDate += " " + value; break;
+                case "builddate": package.BuildDate += " " + value; break;
                 case "reason": package.InstallReason += " " + value; break;
                 case "packager": package.Packager += " " + value; break;
                 case "url": package.Url += " " + value; break;
                 case "licenses": package.Licenses += " " + value; break;
+                case "architecture": package.Architecture += " " + value; break;
+                case "groups": package.Groups += " " + value; break;
+                case "provides": package.Provides += " " + value; break;
+                case "optionaldeps": package.OptionalDeps += " " + value; break;
+                case "conflicts": package.Conflicts += " " + value; break;
                 case "depends": package.Depends += " " + value; break;
                 case "requiredby": package.RequiredBy += " " + value; break;
             }
@@ -463,6 +469,13 @@ public sealed partial class PackageManager
                 package.PackageId = package.Name;
                 package.Backend = Backend.Pacman;
                 package.Installed = true;
+                // pacman prints the literal "None" for empty list fields.
+                package.Groups = CleanList(package.Groups);
+                package.Provides = CleanList(package.Provides);
+                package.OptionalDeps = CleanList(package.OptionalDeps);
+                package.Conflicts = CleanList(package.Conflicts);
+                package.Depends = CleanList(package.Depends);
+                package.RequiredBy = CleanList(package.RequiredBy);
                 result.Add(package);
             }
             package = new Package();
@@ -495,6 +508,7 @@ public sealed partial class PackageManager
                 case "Repository": package.Origin = value; currentKey = "origin"; break;
                 case "Installed Size": package.Size = value; currentKey = "size"; break;
                 case "Install Date": package.InstallDate = value; currentKey = "date"; break;
+                case "Build Date": package.BuildDate = value; currentKey = "builddate"; break;
                 case "Install Reason":
                     package.InstallReason = value;
                     package.Explicit = value.StartsWith("Explicitly", StringComparison.OrdinalIgnoreCase);
@@ -503,6 +517,11 @@ public sealed partial class PackageManager
                 case "Packager": package.Packager = value; currentKey = "packager"; break;
                 case "URL": package.Url = value; currentKey = "url"; break;
                 case "Licenses": package.Licenses = value; currentKey = "licenses"; break;
+                case "Architecture": package.Architecture = value; currentKey = "architecture"; break;
+                case "Groups": package.Groups = value; currentKey = "groups"; break;
+                case "Provides": package.Provides = value; currentKey = "provides"; break;
+                case "Optional Deps": package.OptionalDeps = value; currentKey = "optionaldeps"; break;
+                case "Conflicts With": package.Conflicts = value; currentKey = "conflicts"; break;
                 case "Depends On": package.Depends = value; currentKey = "depends"; break;
                 case "Required By": package.RequiredBy = value; currentKey = "requiredby"; break;
                 default: currentKey = null; break;
@@ -1319,6 +1338,10 @@ public sealed partial class PackageManager
 
     private static string Tail(string output)
         => output.Length <= 400 ? output : output[^400..];
+
+    /// <summary>pacman uses the literal "None" for an empty list field.</summary>
+    private static string CleanList(string value)
+        => value == "None" ? string.Empty : value;
 
     [GeneratedRegex(@"^(\S+) (\S+) \S+ \[installed\]$")]
     private static partial Regex SyncRepoRegex();

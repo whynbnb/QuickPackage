@@ -1349,13 +1349,19 @@ public partial class MainWindowViewModel : ObservableObject
         Add(Loc.T("Origin:"), model.Origin);
         Add(Loc.T("Size:"), model.Size);
         Add(Loc.T("Install date:"), model.InstallDate);
+        Add(Loc.T("Build date:"), model.BuildDate);
         Add(Loc.T("Install reason:"), model.Backend is Backend.Pacman or Backend.Aur
             ? (model.Explicit ? Loc.T("Explicitly installed") : Loc.T("Installed as a dependency"))
             : model.InstallReason);
+        Add(Loc.T("Architecture:"), model.Architecture);
+        Add(Loc.T("Groups:"), item.GroupsText);
         Add(Loc.T("Packager:"), model.Packager);
         if (model.Url.Length > 0)
             DetailFields.Add(DetailFieldViewModel.Link(Loc.T("URL:"), model.Url));
         Add(Loc.T("Licenses:"), model.Licenses);
+        Add(Loc.T("Provides:"), model.Provides);
+        Add(Loc.T("Optional deps:"), model.OptionalDeps);
+        Add(Loc.T("Conflicts:"), model.Conflicts);
         Add(Loc.T("Binaries:"), model.Binaries);
         UpdateDependencies(model);
 

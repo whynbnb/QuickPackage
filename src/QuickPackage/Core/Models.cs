@@ -40,10 +40,16 @@ public sealed class Package
     public string Origin { get; set; } = string.Empty;
     public string Size { get; set; } = string.Empty;
     public string InstallDate { get; set; } = string.Empty;
+    public string BuildDate { get; set; } = string.Empty;
     public string InstallReason { get; set; } = string.Empty;
     public string Packager { get; set; } = string.Empty;
     public string Url { get; set; } = string.Empty;
     public string Licenses { get; set; } = string.Empty;
+    public string Architecture { get; set; } = string.Empty;
+    public string Groups { get; set; } = string.Empty;
+    public string Provides { get; set; } = string.Empty;
+    public string OptionalDeps { get; set; } = string.Empty;
+    public string Conflicts { get; set; } = string.Empty;
     public string Depends { get; set; } = string.Empty;
     public string RequiredBy { get; set; } = string.Empty;
     public string Binaries { get; set; } = string.Empty;
