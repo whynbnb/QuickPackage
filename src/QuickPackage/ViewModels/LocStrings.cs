@@ -28,6 +28,9 @@ public sealed class LocStrings : ObservableObject
     public string Select => Loc.T("Select");
     public string SelectAll => Loc.T("Select all");
     public string ClearSelection => Loc.T("Clear selection");
+    public string ClearFilters => Loc.T("Clear filters");
+    public string ClearFiltersHint => Loc.T("Reset search and all active filters");
+    public string Done => Loc.T("Done");
     public string SelectPackagesHint => Loc.T("Show checkboxes and batch install or uninstall the selected packages");
     public string Preferences => Loc.T("Preferences…");
 

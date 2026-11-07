@@ -363,6 +363,76 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool ShowBulkUninstall => IsSelectionMode && HasUninstallSelection;
 
+    public bool ShowActionBar => IsSelectionMode || ShowUpdatesOnly || ShowOrphansOnly;
+
+    public bool ShowUpdateAction => ShowUpdatesOnly && !IsSelectionMode;
+
+    public bool ShowOrphanAction => ShowOrphansOnly && !IsSelectionMode;
+
+    public string SelectModeText => IsSelectionMode
+        ? Loc.T("Exit selection")
+        : Loc.T("Select");
+
+    public string ListHeaderText => Loc.T("%1 packages", Packages.Count);
+
+    public bool HasActiveFilters =>
+        SearchText.Length > 0
+        || GroupFilter.Length > 0
+        || ShowUpdatesOnly
+        || ShowOrphansOnly
+        || IsSelectionMode
+        || _installState != InstallStateFilter.Installed
+        || !string.Equals(SelectedOrigin, _allOriginsLabel, StringComparison.Ordinal);
+
+    [ObservableProperty]
+    private string _actionBarText = string.Empty;
+
+    [ObservableProperty]
+    private int _selectedCount;
+
+    private void NotifyFilterState()
+    {
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(ShowActionBar));
+        OnPropertyChanged(nameof(ShowUpdateAction));
+        OnPropertyChanged(nameof(ShowOrphanAction));
+        OnPropertyChanged(nameof(SelectModeText));
+    }
+
+    private void UpdateActionBar()
+    {
+        NotifyFilterState();
+        ActionBarText = IsSelectionMode
+            ? Loc.T("Selected: %1", SelectedCount)
+            : ShowUpdatesOnly
+                ? UpdatesChipText
+                : ShowOrphansOnly ? OrphansChipText : string.Empty;
+    }
+
+    [RelayCommand]
+    private void ExitSelection() => IsSelectionMode = false;
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        if (SearchText.Length > 0)
+            SearchText = string.Empty;
+        if (GroupFilter.Length > 0)
+            GroupFilter = string.Empty;
+        if (ShowUpdatesOnly)
+            ShowUpdatesOnly = false;
+        if (ShowOrphansOnly)
+            ShowOrphansOnly = false;
+        if (_installState != InstallStateFilter.Installed)
+            SetInstallState(InstallStateFilter.Installed);
+        if (!string.Equals(SelectedOrigin, _allOriginsLabel, StringComparison.Ordinal))
+            SelectedOrigin = _allOriginsLabel;
+        if (IsSelectionMode)
+            IsSelectionMode = false;
+        SelectChip(ChipKind.All);
+        UpdateActionBar();
+    }
+
     public bool CanGoBack => _navigationIndex > 0;
 
     public bool CanGoForward =>
@@ -523,7 +593,10 @@ public partial class MainWindowViewModel : ObservableObject
     partial void OnSelectedOriginChanged(string value)
     {
         if (!_suppressOriginChange)
+        {
             ApplyFilter();
+            NotifyFilterState();
+        }
     }
 
     public bool IsInstalledFilter
@@ -575,6 +648,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(IsNotInstalledFilter));
         OnPropertyChanged(nameof(IsAllPackagesFilter));
         UpdateCounters();
+        NotifyFilterState();
     }
 
     private bool MatchesInstallState(PackageItemViewModel item) => _installState switch
@@ -617,6 +691,7 @@ public partial class MainWindowViewModel : ObservableObject
         SelectedOrigin = OriginOptions.Contains(previous) ? previous : _allOriginsLabel;
         _suppressOriginChange = false;
         OnPropertyChanged(nameof(AllOriginsLabel));
+        NotifyFilterState();
     }
 
     partial void OnSearchTextChanged(string value)
@@ -624,6 +699,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasSearchText));
         ApplyFilter();
         NotifySearchAvailability();
+        NotifyFilterState();
         ScheduleAurSearch(value);
     }
 
@@ -635,6 +711,7 @@ public partial class MainWindowViewModel : ObservableObject
         OnPropertyChanged(nameof(HasGroupFilter));
         OnPropertyChanged(nameof(GroupFilterText));
         ApplyFilter();
+        NotifyFilterState();
     }
 
     partial void OnShowUpdatesOnlyChanged(bool value)
@@ -643,6 +720,7 @@ public partial class MainWindowViewModel : ObservableObject
             ShowOrphansOnly = false;
         SyncFilterSelection();
         ApplyFilter();
+        UpdateCounters();
     }
 
     partial void OnShowOrphansOnlyChanged(bool value)
@@ -651,6 +729,7 @@ public partial class MainWindowViewModel : ObservableObject
             ShowUpdatesOnly = false;
         SyncFilterSelection();
         ApplyFilter();
+        UpdateCounters();
     }
 
     partial void OnIsSelectionModeChanged(bool value)
@@ -664,6 +743,7 @@ public partial class MainWindowViewModel : ObservableObject
         UpdateCounters();
         OnPropertyChanged(nameof(ShowBulkInstall));
         OnPropertyChanged(nameof(ShowBulkUninstall));
+        NotifyFilterState();
     }
 
     partial void OnIsBusyChanged(bool value)
@@ -880,7 +960,7 @@ public partial class MainWindowViewModel : ObservableObject
     /// </summary>
     private void SyncFilterSelection()
     {
-        var filtered = ShowUpdatesOnly || ShowOrphansOnly;
+        var filtered = (ShowUpdatesOnly || ShowOrphansOnly) && !IsSelectionMode;
         foreach (var item in _all)
         {
             var inScope = MatchesScope(item);
@@ -933,6 +1013,7 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var item in filtered)
             Packages.Add(item);
         OnPropertyChanged(nameof(ShowEmpty));
+        OnPropertyChanged(nameof(ListHeaderText));
     }
 
     private int ComparePackages(PackageItemViewModel left, PackageItemViewModel right)
@@ -1248,6 +1329,8 @@ public partial class MainWindowViewModel : ObservableObject
 
         SelectionText = selected > 0 ? Loc.T("Selected: %1", selected) : string.Empty;
         HasSelection = selected > 0;
+        SelectedCount = selected;
+        UpdateActionBar();
     }
 
     private int CountUpdates(Backend backend)

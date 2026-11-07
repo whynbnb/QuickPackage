@@ -49,8 +49,8 @@
       </MenuItem>
     </Menu>
 
-    <!-- Toolbar: big system / developer switch, search and actions -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto,Auto" Margin="12,6,12,4" ColumnSpacing="10">
+    <!-- Top bar: package mode and the search field only. -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,*" Margin="12,6,12,4" ColumnSpacing="10">
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
         <ToggleButton Classes="mode" Content="{Binding L.SystemPackages}"
                       IsChecked="{Binding IsSystemMode, Mode=TwoWay}"/>
@@ -92,48 +92,6 @@
           </Button>
         </StackPanel>
       </Grid>
-
-      <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">
-        <Button Classes="toolbar" Content="{Binding L.Refresh}"
-                Command="{Binding RefreshCommand}" IsEnabled="{Binding IsNotBusy}"/>
-        <Button Classes="toolbar" Content="⚠" Padding="10,6"
-                Command="{Binding DiagnosticsCommand}"
-                IsVisible="{Binding HasBackendIssues}"
-                ToolTip.Tip="{Binding BackendIssueText}"/>
-      </StackPanel>
-      <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="10">
-        <ToggleButton Classes="chip" Content="{Binding L.Select}"
-                      IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
-                      ToolTip.Tip="{Binding L.SelectPackagesHint}"/>
-        <Button Classes="ghost" Content="{Binding L.SelectAll}"
-                Command="{Binding SelectAllVisibleCommand}"
-                IsVisible="{Binding IsSelectionMode}" FontSize="11" Padding="8,2"/>
-        <Button Classes="ghost" Content="{Binding L.ClearSelection}"
-                Command="{Binding ClearSelectedCommand}"
-                IsVisible="{Binding IsSelectionMode}" FontSize="11" Padding="8,2"/>
-        <Button Classes="toolbar" Content="{Binding InstallSelectedText}"
-                Command="{Binding InstallSelectedCommand}"
-                IsVisible="{Binding ShowBulkInstall}"
-                IsEnabled="{Binding CanBulkInstall}"/>
-        <Button Classes="toolbar danger" Content="{Binding UninstallSelectedText}"
-                Command="{Binding UninstallSelectedCommand}"
-                IsVisible="{Binding ShowBulkUninstall}"
-                IsEnabled="{Binding CanBulkUninstall}"/>
-        <Button Classes="toolbar" Content="{Binding L.Snapshots}"
-                Command="{Binding SnapshotsCommand}"
-                IsVisible="{Binding !IsSelectionMode}"/>
-        <Button Classes="toolbar" Content="{Binding L.CacheCleanup}"
-                Command="{Binding CacheCleanupCommand}"
-                IsVisible="{Binding !IsSelectionMode}"/>
-        <Button Classes="toolbar" Content="{Binding RemoveSelectedText}"
-                Command="{Binding RemoveSelectedOrphansCommand}"
-                IsVisible="{Binding ShowOrphansOnly}"
-                IsEnabled="{Binding CanBulkUpdate}"/>
-        <Button Classes="toolbar" Content="{Binding UpdateSelectedText}"
-                Command="{Binding UpdateSelectedCommand}"
-                IsVisible="{Binding ShowUpdatesOnly}"
-                IsEnabled="{Binding CanBulkUpdate}"/>
-      </StackPanel>
     </Grid>
 
     <!-- Filter chips -->
@@ -210,7 +168,63 @@
       </Grid.ColumnDefinitions>
 
       <Border Grid.Column="0" Classes="pane">
-        <Grid>
+        <Grid RowDefinitions="Auto,Auto,*">
+          <Grid Grid.Row="0" ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6"
+                Margin="12,8,12,4">
+            <TextBlock Text="{Binding ListHeaderText}" Classes="subtle" FontSize="12"
+                       VerticalAlignment="Center"/>
+            <Button Grid.Column="1" Classes="ghost" Content="↻" FontSize="15"
+                    Padding="7,1" Command="{Binding RefreshCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    ToolTip.Tip="{Binding L.RefreshLists}"/>
+            <Button Grid.Column="2" Classes="ghost" Content="⚠" FontSize="13"
+                    Padding="7,1" Command="{Binding DiagnosticsCommand}"
+                    IsVisible="{Binding HasBackendIssues}"
+                    ToolTip.Tip="{Binding BackendIssueText}"/>
+            <Button Grid.Column="3" Classes="groupfilter" Content="{Binding L.ClearFilters}"
+                    Command="{Binding ClearFiltersCommand}"
+                    IsVisible="{Binding HasActiveFilters}"
+                    ToolTip.Tip="{Binding L.ClearFiltersHint}"/>
+            <ToggleButton Grid.Column="4" Classes="chip" Content="{Binding SelectModeText}"
+                          IsChecked="{Binding IsSelectionMode, Mode=TwoWay}"
+                          ToolTip.Tip="{Binding L.SelectPackagesHint}"/>
+          </Grid>
+
+          <Border Grid.Row="1" IsVisible="{Binding ShowActionBar}"
+                  Background="{DynamicResource CardBackgroundBrush}"
+                  BorderThickness="0,0,0,1" BorderBrush="{DynamicResource CardBorderBrush}"
+                  Padding="12,6">
+            <WrapPanel Orientation="Horizontal">
+              <TextBlock Text="{Binding ActionBarText}" Classes="subtle" FontSize="12"
+                         VerticalAlignment="Center" Margin="0,0,10,0"/>
+              <Button Classes="ghost" Content="{Binding L.SelectAll}"
+                      Command="{Binding SelectAllVisibleCommand}"
+                      IsVisible="{Binding ShowActionBar}"
+                      FontSize="11" Padding="8,2" Margin="0,0,4,0"/>
+              <Button Classes="ghost" Content="{Binding L.ClearSelection}"
+                      Command="{Binding ClearSelectedCommand}"
+                      IsVisible="{Binding ShowActionBar}"
+                      FontSize="11" Padding="8,2" Margin="0,0,8,0"/>
+              <Button Classes="toolbar" Content="{Binding UpdateSelectedText}"
+                      Command="{Binding UpdateSelectedCommand}"
+                      IsVisible="{Binding ShowUpdateAction}"
+                      IsEnabled="{Binding CanBulkUpdate}" Margin="0,0,4,0"/>
+              <Button Classes="toolbar" Content="{Binding RemoveSelectedText}"
+                      Command="{Binding RemoveSelectedOrphansCommand}"
+                      IsVisible="{Binding ShowOrphanAction}"
+                      IsEnabled="{Binding CanBulkUpdate}" Margin="0,0,4,0"/>
+              <Button Classes="toolbar" Content="{Binding InstallSelectedText}"
+                      Command="{Binding InstallSelectedCommand}"
+                      IsVisible="{Binding ShowBulkInstall}"
+                      IsEnabled="{Binding CanBulkInstall}" Margin="0,0,4,0"/>
+              <Button Classes="toolbar danger" Content="{Binding UninstallSelectedText}"
+                      Command="{Binding UninstallSelectedCommand}"
+                      IsVisible="{Binding ShowBulkUninstall}"
+                      IsEnabled="{Binding CanBulkUninstall}" Margin="0,0,4,0"/>
+            </WrapPanel>
+          </Border>
+
+          <Grid Grid.Row="2">
           <ListBox Classes="packages" x:Name="PackageList"
                    ItemsSource="{Binding Packages}"
                    SelectedItem="{Binding SelectedPackage, Mode=TwoWay}"
@@ -330,6 +344,7 @@
                      IsVisible="{Binding ShowEmpty}"
                      HorizontalAlignment="Center" VerticalAlignment="Center"
                      Classes="subtle"/>
+          </Grid>
         </Grid>
       </Border>
 
@@ -571,8 +586,6 @@
                   Padding="8,1" Foreground="#E5534B" Command="{Binding StopCommand}"
                   ToolTip.Tip="{Binding L.Stop}"/>
         </StackPanel>
-        <TextBlock Grid.Column="2" Text="{Binding SelectionText}" Classes="subtle" FontSize="12"
-                   VerticalAlignment="Center" IsVisible="{Binding HasSelection}"/>
         <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2"
                     VerticalAlignment="Center" IsVisible="{Binding IsLogExpanded}">
           <Button Classes="ghost" Content="{Binding L.CopyLog}" FontSize="11"
