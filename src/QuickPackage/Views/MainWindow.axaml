@@ -76,6 +76,11 @@
     <!-- Filter chips -->
     <DockPanel Grid.Row="2" Margin="12,2,12,6">
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+        <Button Classes="groupfilter"
+                Content="{Binding GroupFilterText}"
+                Command="{Binding ClearGroupFilterCommand}"
+                IsVisible="{Binding HasGroupFilter}"
+                ToolTip.Tip="{Binding L.ClearGroupFilter}"/>
         <ToggleButton Classes="chip"
                       Content="{Binding OrphansChipText}"
                       IsChecked="{Binding ShowOrphansOnly, Mode=TwoWay}"
@@ -153,7 +158,7 @@
                             <TextBlock Text="{Binding OrphanText}" FontSize="11"
                                        Foreground="{DynamicResource DangerBrush}"/>
                           </Border>
-                          <ItemsControl ItemsSource="{Binding Groups}"
+                          <ItemsControl ItemsSource="{Binding GroupChips}"
                                         IsVisible="{Binding HasGroups}"
                                         VerticalAlignment="Center">
                             <ItemsControl.ItemsPanel>
@@ -162,14 +167,10 @@
                               </ItemsPanelTemplate>
                             </ItemsControl.ItemsPanel>
                             <ItemsControl.ItemTemplate>
-                              <DataTemplate x:DataType="x:String">
-                                <Border Classes="pill tag" Margin="0,1,6,1"
-                                        VerticalAlignment="Center"
-                                        Background="{DynamicResource GroupBackgroundBrush}"
-                                        BorderBrush="{DynamicResource GroupBorderBrush}">
-                                  <TextBlock Text="{Binding}" FontSize="11"
-                                             Foreground="{DynamicResource GroupBrush}"/>
-                                </Border>
+                              <DataTemplate x:DataType="vm:DependencyViewModel">
+                                <Button Classes="groupchip" Content="{Binding Name}"
+                                      Command="{Binding NavigateCommand}"
+                                      CommandParameter="{Binding Name}"/>
                               </DataTemplate>
                             </ItemsControl.ItemTemplate>
                           </ItemsControl>
@@ -282,6 +283,22 @@
                         <HyperlinkButton Grid.Column="1" Content="{Binding Value}" FontSize="12"
                                          Padding="0" Command="{Binding OpenCommand}"
                                          IsVisible="{Binding IsLink}"/>
+                        <ItemsControl Grid.Column="1" ItemsSource="{Binding Chips}"
+                                      IsVisible="{Binding IsChips}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                              <WrapPanel/>
+                            </ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DependencyViewModel">
+                              <Button Classes="dependency" Content="{Binding Name}"
+                                      Command="{Binding NavigateCommand}"
+                                      CommandParameter="{Binding Name}"
+                                      IsEnabled="{Binding IsAvailable}"/>
+                            </DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
                       </Grid>
                     </DataTemplate>
                   </ItemsControl.ItemTemplate>

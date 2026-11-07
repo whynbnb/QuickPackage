@@ -44,6 +44,7 @@ public sealed class LocStrings : ObservableObject
     public string NoMatchingPackages => Loc.T("No matching packages");
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
     public string ShowOnlyOrphans => Loc.T("Show only orphan packages");
+    public string ClearGroupFilter => Loc.T("Clear group filter");
     public string Back => Loc.T("Back");
     public string Forward => Loc.T("Forward");
     public string DependsOnDeps => Loc.T("Depends on");

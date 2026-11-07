@@ -16,7 +16,8 @@ C# 14 and Avalonia.
   install-reason tags and one-click promotion to explicitly installed
 - Rich pacman metadata in the detail pane — architecture, build date,
   package groups, provides, optional dependencies and conflicts — with
-  package groups also shown as pill tags on each list row
+  package groups also shown as pill tags on each list row; clicking a group
+  chip filters the list to that group and shows a removable filter chip
 - **Cache cleanup** for pacman and the AUR helper: shows both cache sizes
   and contents (versions, sizes, installed/old status, cached AUR sources),
   and uses paccache (falling back to `pacman -Sc`), plus the helper's native

@@ -1,5 +1,6 @@
 using Avalonia.Media;
 using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
 using QuickPackage.Core;
 
 namespace QuickPackage.ViewModels;
@@ -8,14 +9,18 @@ namespace QuickPackage.ViewModels;
 public partial class PackageItemViewModel : ObservableObject
 {
     private static readonly Dictionary<(uint, byte), IBrush> BrushCache = [];
+    private static readonly IRelayCommand NoopCommand = new RelayCommand(() => { });
 
     private IReadOnlyList<string>? _groups;
+    private IReadOnlyList<DependencyViewModel>? _groupChips;
+    private readonly IRelayCommand<string>? _filterByGroup;
 
     public Package Model { get; }
 
-    public PackageItemViewModel(Package model)
+    public PackageItemViewModel(Package model, IRelayCommand<string>? filterByGroup = null)
     {
         Model = model;
+        _filterByGroup = filterByGroup;
         _isSelected = model.Selected;
     }
 
@@ -83,6 +88,20 @@ public partial class PackageItemViewModel : ObservableObject
         .ToList();
 
     public bool HasGroups => Groups.Count > 0;
+
+    /// <summary>Clickable group chips that filter the list to the chosen group.</summary>
+    public IReadOnlyList<DependencyViewModel> GroupChips => _groupChips ??= Groups
+        .Select(group => new DependencyViewModel
+        {
+            Name = group,
+            NavigateCommand = _filterByGroup is null
+                ? NoopCommand
+                : new RelayCommand(() => _filterByGroup.Execute(group)),
+        })
+        .ToList();
+
+    public bool HasGroup(string group)
+        => Groups.Any(item => string.Equals(item, group, StringComparison.Ordinal));
 
     public string GroupsText => string.Join(", ", Groups);
 
@@ -278,9 +297,11 @@ public partial class PackageItemViewModel : ObservableObject
         OnPropertyChanged(nameof(ShowOrphan));
         OnPropertyChanged(nameof(OrphanText));
         _groups = null;
+        _groupChips = null;
         OnPropertyChanged(nameof(Groups));
         OnPropertyChanged(nameof(HasGroups));
         OnPropertyChanged(nameof(GroupsText));
+        OnPropertyChanged(nameof(GroupChips));
         OnPropertyChanged(nameof(ReasonBackground));
         OnPropertyChanged(nameof(ReasonBorderBrush));
         OnPropertyChanged(nameof(ReasonForeground));

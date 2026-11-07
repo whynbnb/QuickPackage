@@ -77,6 +77,33 @@
     <Setter Property="Opacity" Value="0.55"/>
   </Style>
 
+  <!-- Clickable package-group chip; also used on list rows. -->
+  <Style Selector="Button.groupchip">
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="Padding" Value="8,1"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Margin" Value="0,1,6,1"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GroupBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource GroupBackgroundBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource GroupBrush}"/>
+  </Style>
+  <Style Selector="Button.groupchip:pointerover /template/ ContentPresenter">
+    <Setter Property="Background" Value="{DynamicResource GroupBackgroundBrush}"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GroupBorderBrush}"/>
+  </Style>
+
+  <!-- Active group filter; clicking it clears the filter. -->
+  <Style Selector="Button.groupfilter">
+    <Setter Property="CornerRadius" Value="13"/>
+    <Setter Property="Padding" Value="12,4"/>
+    <Setter Property="FontSize" Value="12"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource GroupBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource GroupBackgroundBrush}"/>
+    <Setter Property="Foreground" Value="{DynamicResource GroupBrush}"/>
+  </Style>
+
   <!-- Repository / origin tag, outlined so it reads as metadata. -->
   <Style Selector="Border.pill.tag">
     <Setter Property="CornerRadius" Value="7"/>

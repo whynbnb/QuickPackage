@@ -119,6 +119,15 @@ public partial class MainWindowViewModel : ObservableObject
     private string _searchText = string.Empty;
 
     [ObservableProperty]
+    private string _groupFilter = string.Empty;
+
+    public bool HasGroupFilter => GroupFilter.Length > 0;
+
+    public string GroupFilterText => HasGroupFilter
+        ? Loc.T("Group: %1", GroupFilter) + "  ✕"
+        : string.Empty;
+
+    [ObservableProperty]
     private bool _showUpdatesOnly;
 
     [ObservableProperty]
@@ -261,6 +270,13 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
+    partial void OnGroupFilterChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasGroupFilter));
+        OnPropertyChanged(nameof(GroupFilterText));
+        ApplyFilter();
+    }
+
     partial void OnShowUpdatesOnlyChanged(bool value)
     {
         if (value && ShowOrphansOnly)
@@ -347,6 +363,9 @@ public partial class MainWindowViewModel : ObservableObject
         _isDevMode = dev;
         OnPropertyChanged(nameof(IsDevMode));
         OnPropertyChanged(nameof(IsSystemMode));
+        // Groups only exist for system (pacman/AUR) packages.
+        if (GroupFilter.Length > 0)
+            GroupFilter = string.Empty;
         if (dev)
             SelectChip(ChipKind.All);
         RefreshModeUi(adjustMode: false);
@@ -473,6 +492,30 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
+    [RelayCommand]
+    private void FilterByGroup(string? group)
+    {
+        if (string.IsNullOrWhiteSpace(group))
+            return;
+        // A group view is a fresh scope: drop text and update/orphan filters
+        // so an unrelated previous filter cannot silently narrow it.
+        if (SearchText.Length > 0)
+            SearchText = string.Empty;
+        if (ShowUpdatesOnly)
+            ShowUpdatesOnly = false;
+        if (ShowOrphansOnly)
+            ShowOrphansOnly = false;
+        GroupFilter = group;
+        StatusMessage = Loc.T("%1 packages in group %2", Packages.Count, group);
+    }
+
+    [RelayCommand]
+    private void ClearGroupFilter()
+    {
+        GroupFilter = string.Empty;
+        StatusMessage = Loc.T("Loaded %1 packages", _all.Count);
+    }
+
     private void ApplyFilter()
     {
         var filtered = new List<PackageItemViewModel>(_all.Count);
@@ -503,6 +546,9 @@ public partial class MainWindowViewModel : ObservableObject
             return false;
 
         if (ShowOrphansOnly && !model.Orphan)
+            return false;
+
+        if (GroupFilter.Length > 0 && !item.HasGroup(GroupFilter))
             return false;
 
         if (SearchText.Length > 0)
@@ -664,7 +710,7 @@ public partial class MainWindowViewModel : ObservableObject
             _all.Clear();
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
-                var item = new PackageItemViewModel(package);
+                var item = new PackageItemViewModel(package, FilterByGroupCommand);
                 // Keep the footer selection count and action buttons in sync
                 // when a card's checkbox is toggled.
                 item.PropertyChanged += OnPackagePropertyChanged;
@@ -672,6 +718,10 @@ public partial class MainWindowViewModel : ObservableObject
             }
             if (_updatesLoaded)
                 ApplyUpdatesToModels();
+            // A group can disappear between refreshes; drop the filter rather
+            // than leaving the list silently empty.
+            if (GroupFilter.Length > 0 && !_all.Any(item => item.HasGroup(GroupFilter)))
+                GroupFilter = string.Empty;
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
@@ -910,6 +960,8 @@ public partial class MainWindowViewModel : ObservableObject
             ShowUpdatesOnly = false;
         if (ShowOrphansOnly)
             ShowOrphansOnly = false;
+        if (GroupFilter.Length > 0)
+            GroupFilter = string.Empty;
 
         var chip = (ChipKind)item.Model.Backend;
         if (_selectedChip != ChipKind.All && _selectedChip != chip)
@@ -1354,7 +1406,8 @@ public partial class MainWindowViewModel : ObservableObject
             ? (model.Explicit ? Loc.T("Explicitly installed") : Loc.T("Installed as a dependency"))
             : model.InstallReason);
         Add(Loc.T("Architecture:"), model.Architecture);
-        Add(Loc.T("Groups:"), item.GroupsText);
+        if (item.GroupChips.Count > 0)
+            DetailFields.Add(DetailFieldViewModel.ChipList(Loc.T("Groups:"), item.GroupChips));
         Add(Loc.T("Packager:"), model.Packager);
         if (model.Url.Length > 0)
             DetailFields.Add(DetailFieldViewModel.Link(Loc.T("URL:"), model.Url));
@@ -1481,6 +1534,7 @@ public partial class MainWindowViewModel : ObservableObject
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
         L.NotifyAll();
+        OnPropertyChanged(nameof(GroupFilterText));
         foreach (var item in LogItems)
             item.RefreshLocalization();
         UpdateCounters();
