@@ -25,6 +25,9 @@ C# 14 and Avalonia.
   dependencies and conflicts — with package groups also shown as pill tags
   on each list row; clicking a group chip filters the list to that group and
   shows a removable filter chip
+- A **resizable master/detail split** that starts at a 3:2 ratio and keeps
+  the dragged position between launches, alongside the remembered activity
+  log height
 - **Cache cleanup** for pacman and the AUR helper: shows both cache sizes
   and contents (versions, sizes, installed/old status, cached AUR sources),
   and uses paccache (falling back to `pacman -Sc`), plus the helper's native
@@ -101,8 +104,10 @@ Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 - `[General]` — language, theme, startup update check, the local query
   timeout (`CommandTimeout`), the update/download timeout
   (`DownloadTimeout`), the network retry count (`NetworkRetries`), the AUR
-  helper (`paru`/`yay`), the activity log's expanded state, height and
-  detail visibility, and one `Enable*` key per backend
+  helper (`paru`/`yay`), the master/detail split ratio
+  (`SplitRatioPercent`, default 60 for a 3:2 layout), the activity log's
+  expanded state, height and detail visibility, and one `Enable*` key per
+  backend
 - `[Proxy]` — mode, host, port and one `Enable*` key per backend
 
 Snapshots are stored next to it in

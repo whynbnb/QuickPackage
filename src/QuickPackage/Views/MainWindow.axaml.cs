@@ -22,6 +22,7 @@ public partial class MainWindow : Window, IDialogService
         Core.FontStrategy.ApplyTextOptions(this);
         _viewModel = new MainWindowViewModel(this);
         DataContext = _viewModel;
+        ApplyContentSplitRatio();
         _viewModel.LogUpdated += ScrollLogToEnd;
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
@@ -117,6 +118,30 @@ public partial class MainWindow : Window, IDialogService
     private void OnLogResizeCompleted(object? sender, VectorEventArgs e)
         => _viewModel.SaveLogPanelState();
 
+    /// <summary>Restores the saved 3:2-style star weights between list and detail.</summary>
+    private void ApplyContentSplitRatio()
+    {
+        var ratio = _viewModel.ContentSplitRatio;
+        ContentSplit.ColumnDefinitions[0].Width = new GridLength(ratio, GridUnitType.Star);
+        ContentSplit.ColumnDefinitions[2].Width = new GridLength(1 - ratio, GridUnitType.Star);
+    }
+
+    private void OnContentSplitDragCompleted(object? sender, VectorEventArgs e)
+    {
+        SaveContentSplitRatio();
+        // Convert the dragged pixel widths back to star weights so resizing
+        // the window keeps the chosen proportion.
+        ApplyContentSplitRatio();
+    }
+
+    private void SaveContentSplitRatio()
+    {
+        var left = ContentSplit.ColumnDefinitions[0].ActualWidth;
+        var right = ContentSplit.ColumnDefinitions[2].ActualWidth;
+        if (left + right > 0)
+            _viewModel.SaveContentSplitRatio(left / (left + right));
+    }
+
     private async void OnOpened(object? sender, EventArgs e)
     {
         try
@@ -132,6 +157,10 @@ public partial class MainWindow : Window, IDialogService
 
     private async void OnClosing(object? sender, WindowClosingEventArgs e)
     {
+        // Persist the splitter positions even if a drag ended unexpectedly.
+        _viewModel.SaveLogPanelState();
+        SaveContentSplitRatio();
+
         if (!_viewModel.IsBusy || _closeConfirmed)
             return;
         e.Cancel = true;

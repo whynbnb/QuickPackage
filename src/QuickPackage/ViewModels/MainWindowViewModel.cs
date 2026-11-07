@@ -35,7 +35,6 @@ public partial class MainWindowViewModel : ObservableObject
     private const int MaxLogItems = 40;
     private const double MinLogPanelHeight = 90;
     private const double MaxLogPanelHeight = 600;
-
     private Dictionary<Backend, Dictionary<string, string>> _updates = [];
     private bool _updatesLoaded;
     private int _scopedUpdateCount;
@@ -76,6 +75,8 @@ public partial class MainWindowViewModel : ObservableObject
         _isLogDetailed = _config.GetBool("General", "LogDetails", true);
         _logPanelHeight = Math.Clamp(
             _config.GetInt("General", "LogPanelHeight", 170), (int)MinLogPanelHeight, (int)MaxLogPanelHeight);
+        _contentSplitRatio = Math.Clamp(
+            _config.GetInt("General", "SplitRatioPercent", 60), 20, 80) / 100.0;
 
         _manager.Message += message =>
         {
@@ -203,6 +204,19 @@ public partial class MainWindowViewModel : ObservableObject
 
     [ObservableProperty]
     private double _logPanelHeight = 170;
+
+    private double _contentSplitRatio = 0.6;
+
+    /// <summary>Fraction of the master/detail width given to the package list.</summary>
+    public double ContentSplitRatio => _contentSplitRatio;
+
+    public void SaveContentSplitRatio(double ratio)
+    {
+        _contentSplitRatio = Math.Clamp(ratio, 0.2, 0.8);
+        _config.Set("General", "SplitRatioPercent",
+            (int)Math.Round(_contentSplitRatio * 100));
+        _config.Save();
+    }
 
     [ObservableProperty]
     private string _currentCommand = string.Empty;

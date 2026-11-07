@@ -131,8 +131,13 @@
       </ItemsControl>
     </DockPanel>
 
-    <!-- Master / detail -->
-    <Grid Grid.Row="3" ColumnDefinitions="*,340" Margin="12,0,12,8">
+    <!-- Master / detail: 3:2 by default, resizable and remembered. -->
+    <Grid Grid.Row="3" x:Name="ContentSplit" Margin="12,0,12,8">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="3*" MinWidth="360"/>
+        <ColumnDefinition Width="6"/>
+        <ColumnDefinition Width="2*" MinWidth="300"/>
+      </Grid.ColumnDefinitions>
 
       <Border Grid.Column="0" Classes="pane">
         <Grid>
@@ -230,7 +235,15 @@
         </Grid>
       </Border>
 
-      <Border Grid.Column="1" Classes="pane" Margin="10,0,0,0">
+      <Panel Grid.Column="1">
+        <Border Width="1" HorizontalAlignment="Center" IsHitTestVisible="False"
+                Background="{DynamicResource CardBorderBrush}"/>
+        <GridSplitter ResizeDirection="Columns" ResizeBehavior="PreviousAndNext"
+                      Background="Transparent" Cursor="SizeWestEast"
+                      DragCompleted="OnContentSplitDragCompleted"/>
+      </Panel>
+
+      <Border Grid.Column="2" Classes="pane" Margin="4,0,0,0">
         <Grid>
           <StackPanel IsVisible="{Binding !IsPackageSelected}"
                       HorizontalAlignment="Center" VerticalAlignment="Center">
