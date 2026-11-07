@@ -219,6 +219,12 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _hasUpdates;
 
     [ObservableProperty]
+    private bool _hasAnyUpdates;
+
+    [ObservableProperty]
+    private string _updateAllText = string.Empty;
+
+    [ObservableProperty]
     private bool _hasSelection;
 
     [ObservableProperty]
@@ -1149,6 +1155,11 @@ public partial class MainWindowViewModel : ObservableObject
         if (!HasOrphans && ShowOrphansOnly)
             ShowOrphansOnly = false;
 
+        var anyUpdates = _all.Count(item =>
+            MatchesInstallState(item) && item.Model.Status == PackageStatus.NeedsUpdate);
+        HasAnyUpdates = anyUpdates > 0;
+        UpdateAllText = Loc.T("Update all (%1)", anyUpdates);
+
         SelectionText = selected > 0 ? Loc.T("Selected: %1", selected) : string.Empty;
         HasSelection = selected > 0;
     }
@@ -1749,6 +1760,23 @@ public partial class MainWindowViewModel : ObservableObject
         if (!confirmed)
             return;
         await RunOperationAsync(PackageOperation.Update, packages);
+    }
+
+    [RelayCommand]
+    private async Task UpdateAllAsync()
+    {
+        var packages = _all
+            .Where(item => MatchesInstallState(item) && item.Model.Status == PackageStatus.NeedsUpdate)
+            .Select(item => item.Model)
+            .ToList();
+        if (packages.Count == 0)
+            return;
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Update, packages, Loc.T("Update all backends"),
+            Loc.Tn("Update the package below across every enabled backend?",
+                "Update %1 packages across every enabled backend?", packages.Count, packages.Count));
+        if (confirmed)
+            await RunOperationAsync(PackageOperation.Update, packages);
     }
 
     [RelayCommand]
