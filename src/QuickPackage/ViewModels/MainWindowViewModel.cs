@@ -38,6 +38,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     private Dictionary<Backend, Dictionary<string, string>> _updates = [];
     private bool _updatesLoaded;
+    private int _scopedUpdateCount;
     private bool _suppressChipEvents;
     private bool _isDevMode;
     private ChipKind _selectedChip = ChipKind.All;
@@ -565,6 +566,7 @@ public partial class MainWindowViewModel : ObservableObject
         var scopedUpdates = _selectedChip == ChipKind.All
             ? (_isDevMode ? devUpdates : totalUpdates - devUpdates)
             : CountUpdates((Backend)_selectedChip);
+        _scopedUpdateCount = scopedUpdates;
 
         UpdatesChipText = Loc.T("Updates (%1)", scopedUpdates);
         UpdateSelectedText = Loc.T("Update Selected (%1)", selected);
@@ -633,6 +635,7 @@ public partial class MainWindowViewModel : ObservableObject
                 StatusMessage = Loc.T("Cancelled");
                 return;
             }
+            var selection = CaptureSelection();
             _all.Clear();
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
@@ -647,6 +650,8 @@ public partial class MainWindowViewModel : ObservableObject
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
+            RestoreSelection(selection);
+            RebuildDetail(SelectedPackage);
             StatusMessage = Loc.T("Loaded %1 packages", packages.Count);
         }
         catch (OperationCanceledException)
@@ -685,8 +690,9 @@ public partial class MainWindowViewModel : ObservableObject
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
+            RebuildDetail(SelectedPackage);
             StatusMessage = HasUpdates
-                ? Loc.T("%1 updates available", CountAllUpdates())
+                ? Loc.T("%1 updates available", _scopedUpdateCount)
                 : Loc.T("All packages are up to date");
         }
         catch (OperationCanceledException)
@@ -703,19 +709,20 @@ public partial class MainWindowViewModel : ObservableObject
         }
     }
 
-    private int CountAllUpdates()
-    {
-        var count = 0;
-        foreach (var item in _all)
-        {
-            if (item.Model.Status == PackageStatus.NeedsUpdate)
-                ++count;
-        }
-        return count;
-    }
-
     private void ApplyUpdatesToModels()
     {
+        // Drop markers from the previous check first. Otherwise a refresh
+        // re-applies the old map and a later check that returns no entries
+        // leaves packages looking updatable until another manual refresh.
+        foreach (var item in _all)
+        {
+            if (item.Model.Status != PackageStatus.NeedsUpdate)
+                continue;
+            item.Model.Status = PackageStatus.Idle;
+            item.Model.NewVersion = string.Empty;
+            item.Refresh();
+        }
+
         foreach (var (backend, entries) in _updates)
         {
             foreach (var (name, newVersion) in entries)
@@ -733,6 +740,33 @@ public partial class MainWindowViewModel : ObservableObject
                     break;
                 }
             }
+        }
+    }
+
+    private (Backend Backend, string Id)? CaptureSelection()
+        => SelectedPackage is { } item
+            ? (item.Model.Backend, item.Model.EffectiveId)
+            : null;
+
+    private void RestoreSelection((Backend Backend, string Id)? key)
+    {
+        if (key is null)
+            return;
+
+        SelectedPackage = Packages.FirstOrDefault(item =>
+            item.Model.Backend == key.Value.Backend
+            && item.Model.EffectiveId == key.Value.Id);
+    }
+
+    /// <summary>Drops update entries for packages that a successful operation touched.</summary>
+    private void ForgetUpdates(IReadOnlyList<Package> packages)
+    {
+        foreach (var package in packages)
+        {
+            if (!_updates.TryGetValue(package.Backend, out var entries))
+                continue;
+            entries.Remove(package.Name);
+            entries.Remove(package.EffectiveId);
         }
     }
 
@@ -789,6 +823,12 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (cancelled)
             return;
+
+        // The just-updated packages must not be re-marked from the previous
+        // update map while the full list reloads; the check below refreshes
+        // the remaining entries.
+        if (ok)
+            ForgetUpdates(packages);
 
         await RefreshAsync();
         await CheckUpdatesAsync();
