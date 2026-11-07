@@ -1,0 +1,97 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.NewsWindow"
+        x:DataType="vm:NewsViewModel"
+        Width="920" Height="680"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,*,Auto" Margin="20" RowSpacing="12">
+    <Grid Grid.Row="0" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+      <StackPanel Spacing="2">
+        <TextBlock Text="{Binding Title}" Classes="h1"/>
+        <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+      </StackPanel>
+      <Button Grid.Column="1" Classes="toolbar" Content="{Binding RefreshText}"
+              Command="{Binding RefreshCommand}" IsEnabled="{Binding !IsBusy}"
+              VerticalAlignment="Center"/>
+    </Grid>
+
+    <TabControl Grid.Row="1">
+      <TabItem Header="{Binding NewsTab}">
+        <Grid RowDefinitions="*,Auto">
+          <ListBox ItemsSource="{Binding News}" BorderThickness="0" Background="Transparent"
+                   IsVisible="{Binding HasNews}"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:NewsItemViewModel">
+                <StackPanel Spacing="3" Margin="2,6">
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="13"
+                               TextWrapping="Wrap"/>
+                    <TextBlock Grid.Column="1" Text="{Binding DateText}" Classes="subtle"
+                               FontSize="11" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Classes="toolbar" Content="{Binding OpenText}"
+                            Command="{Binding OpenCommand}" Padding="10,3" FontSize="11"/>
+                  </Grid>
+                  <TextBlock Text="{Binding Summary}" Classes="subtle" FontSize="12"
+                             TextWrapping="Wrap"/>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="{Binding NewsEmptyText}" Classes="subtle"
+                     IsVisible="{Binding !HasNews}" FontSize="12"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="{Binding MirrorsTab}">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="6">
+          <Grid ColumnDefinitions="*,110,150,90,70,70" ColumnSpacing="8">
+            <TextBlock Text="{Binding MirrorUrlHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="1" Text="{Binding CountryHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="2" Text="{Binding LastSyncHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="3" Text="{Binding CompletionHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="4" Text="{Binding DelayHeader}" Classes="subtle" FontSize="11"/>
+            <TextBlock Grid.Column="5" Text="{Binding ScoreHeader}" Classes="subtle" FontSize="11"/>
+          </Grid>
+          <ListBox Grid.Row="1" ItemsSource="{Binding Mirrors}" BorderThickness="0"
+                   Background="Transparent"
+                   IsVisible="{Binding HasMirrors}"
+                   ScrollViewer.VerticalScrollBarVisibility="Auto"
+                   ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox.ItemTemplate>
+              <DataTemplate x:DataType="vm:MirrorRowViewModel">
+                <Grid ColumnDefinitions="*,110,150,90,70,70" ColumnSpacing="8" Margin="0,2">
+                  <TextBlock Text="{Binding Url}" Classes="mono" FontSize="11"
+                             TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="1" Text="{Binding Country}" Classes="subtle" FontSize="11"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="2" Text="{Binding LastSync}" Classes="mono" FontSize="11"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="3" Text="{Binding Completion}" Classes="subtle" FontSize="11"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="4" Text="{Binding Delay}" Classes="subtle" FontSize="11"
+                             VerticalAlignment="Center"/>
+                  <TextBlock Grid.Column="5" Text="{Binding Score}" Classes="subtle" FontSize="11"
+                             VerticalAlignment="Center"/>
+                </Grid>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Grid.Row="1" Text="{Binding MirrorsEmptyText}" Classes="subtle"
+                     IsVisible="{Binding !HasMirrors}" FontSize="12"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"
+                     TextWrapping="Wrap" MaxWidth="520" TextAlignment="Center"/>
+          <TextBlock Grid.Row="2" Text="{Binding StatusMessage}" Classes="subtle" FontSize="11"
+                     TextWrapping="Wrap"/>
+        </Grid>
+      </TabItem>
+    </TabControl>
+
+    <Button Grid.Row="2" Content="{Binding CloseText}" MinWidth="88"
+            HorizontalAlignment="Right" IsDefault="True" Click="OnClose"/>
+  </Grid>
+</Window>

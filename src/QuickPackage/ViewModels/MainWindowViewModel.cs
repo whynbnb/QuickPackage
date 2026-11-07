@@ -2439,6 +2439,13 @@ public partial class MainWindowViewModel : ObservableObject
         await _dialogs.ShowHistoryAsync(viewModel);
     }
 
+    [RelayCommand]
+    private async Task NewsAsync()
+    {
+        var viewModel = new NewsViewModel(_online);
+        await _dialogs.ShowNewsAsync(viewModel);
+    }
+
     /// <summary>Updates the toolbar warning from the enabled backends' tools.</summary>
     private void RefreshBackendHealth()
     {

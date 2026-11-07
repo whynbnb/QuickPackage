@@ -62,6 +62,7 @@ public sealed class LocStrings : ObservableObject
     public string InstallLocalPackage => Loc.T("Install local package…");
     public string DependencyTree => Loc.T("Dependency tree");
     public string Diagnostics => Loc.T("Diagnose backends");
+    public string News => Loc.T("Arch news and mirrors");
     public string BackendsDisabledHint => Loc.T("All package backends are disabled. Enable at least one in Settings.");
     public string NoMatchingPackages => Loc.T("No matching packages");
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");

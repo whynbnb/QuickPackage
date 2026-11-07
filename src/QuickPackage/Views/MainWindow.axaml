@@ -43,6 +43,7 @@
         <MenuItem Header="{Binding L.Preferences}" InputGesture="Ctrl+Shift+OemComma" Command="{Binding SettingsCommand}"/>
       </MenuItem>
       <MenuItem Header="{Binding L.Help}">
+        <MenuItem Header="{Binding L.News}" Command="{Binding NewsCommand}"/>
         <MenuItem Header="{Binding L.Diagnostics}" Command="{Binding DiagnosticsCommand}"/>
         <MenuItem Header="{Binding L.About}" Command="{Binding AboutCommand}"/>
       </MenuItem>

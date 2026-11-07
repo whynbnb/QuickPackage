@@ -26,6 +26,8 @@ public interface IDialogService
 
     Task ShowDependencyTreeAsync(DependencyTreeViewModel viewModel);
 
+    Task ShowNewsAsync(NewsViewModel viewModel);
+
     Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null);
 }
