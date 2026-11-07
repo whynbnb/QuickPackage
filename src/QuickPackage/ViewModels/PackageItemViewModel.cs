@@ -173,25 +173,30 @@ public partial class PackageItemViewModel : ObservableObject
         }
     }
 
-    public bool ShowBadge => Model.Status != PackageStatus.Idle || !Model.Installed;
+    public bool ShowBadge =>
+        Model.Status != PackageStatus.Idle || !Model.Installed || Model.Ignored;
 
     public string BadgeText => !Model.Installed
         ? Loc.T("Not installed")
-        : Model.Status switch
-        {
-            PackageStatus.NeedsUpdate => Loc.T("Update"),
-            PackageStatus.Installed => Loc.T("Installed"),
-            PackageStatus.Updating => Loc.T("Updating…"),
-            PackageStatus.Removing => Loc.T("Removing…"),
-            PackageStatus.Failed => Loc.T("Failed"),
-            _ => string.Empty,
-        };
+        : Model.Ignored && Model.Status == PackageStatus.Idle
+            ? Loc.T("Ignored")
+            : Model.Status switch
+            {
+                PackageStatus.NeedsUpdate => Loc.T("Update"),
+                PackageStatus.Installed => Loc.T("Installed"),
+                PackageStatus.Updating => Loc.T("Updating…"),
+                PackageStatus.Removing => Loc.T("Removing…"),
+                PackageStatus.Failed => Loc.T("Failed"),
+                _ => string.Empty,
+            };
 
     public IBrush BadgeBackground
     {
         get
         {
             if (!Model.Installed)
+                return Brush(120, 128, 140, 45);
+            if (Model.Ignored && Model.Status == PackageStatus.Idle)
                 return Brush(120, 128, 140, 45);
             var (r, g, b) = Model.Status switch
             {

@@ -68,6 +68,9 @@ public sealed class Package
     public double Popularity { get; set; }
     public bool OutOfDate { get; set; }
 
+    /// <summary>Excluded from update operations (stored in the config file).</summary>
+    public bool Ignored { get; set; }
+
     /// <summary>Foreign (AUR/local) pacman package: installed but absent from the sync repos.</summary>
     public bool Foreign { get; set; }
 

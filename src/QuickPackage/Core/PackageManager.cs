@@ -36,6 +36,10 @@ public sealed partial class PackageManager
     // Only paru and yay are supported; empty means auto-detect.
     private string _preferredAurHelper = string.Empty;
 
+    // Packages the user asked not to upgrade. Pacman receives them as
+    // --ignore arguments so a full -Syu leaves them untouched.
+    private IReadOnlyList<string> _ignoredPackages = [];
+
     // Supplies the sudo password when no cached credentials are available.
     // The callback shows the prompt on the UI thread; the validator it is
     // given re-checks the password without closing the dialog.
@@ -46,6 +50,18 @@ public sealed partial class PackageManager
 
     public void SetAurHelper(string? helper)
         => _preferredAurHelper = helper is "paru" or "yay" ? helper : string.Empty;
+
+    public void SetIgnoredPackages(IEnumerable<string> names)
+        => _ignoredPackages = names
+            .Where(name => name.Length > 0)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(name => name, StringComparer.Ordinal)
+            .ToList();
+
+    private string[] IgnoreArguments()
+        => _ignoredPackages.Count == 0
+            ? []
+            : ["--ignore", string.Join(',', _ignoredPackages)];
 
     public void SetQueryTimeout(int seconds)
         => _queryTimeoutMilliseconds = Math.Clamp(seconds, 5, 600) * 1000;
@@ -1252,8 +1268,9 @@ public sealed partial class PackageManager
             var aur = packages.Where(p => p.Backend == Backend.Aur).ToList();
             if (pacman.Count > 0)
             {
-                commands.Add(CommandRunner.FormatCommand(
-                    "sudo", ["pacman", "-Syu", "--noconfirm"]));
+                var arguments = new List<string> { "pacman", "-Syu", "--noconfirm" };
+                arguments.AddRange(IgnoreArguments());
+                commands.Add(CommandRunner.FormatCommand("sudo", arguments));
                 foreach (var package in pacman)
                     items.Add(new PreviewItem(
                         Loc.T("Upgrade"), package.Name, package.Version,
@@ -1269,8 +1286,9 @@ public sealed partial class PackageManager
                 }
                 else
                 {
-                    commands.Add(CommandRunner.FormatCommand(
-                        helper, ["-Sua", "--noconfirm"]));
+                    var arguments = new List<string> { "-Sua", "--noconfirm" };
+                    arguments.AddRange(IgnoreArguments());
+                    commands.Add(CommandRunner.FormatCommand(helper, arguments));
                     foreach (var package in aur)
                         items.Add(new PreviewItem(
                             Loc.T("Upgrade"), package.Name, package.Version,
@@ -1671,8 +1689,10 @@ public sealed partial class PackageManager
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     Report(Loc.T("Upgrading system (pacman -Syu)…"));
+                    var arguments = new List<string> { "pacman", "-Syu", "--noconfirm" };
+                    arguments.AddRange(IgnoreArguments());
                     var run = await RunNetworkAsync(
-                        "sudo", ["pacman", "-Syu", "--noconfirm"], _downloadTimeoutMilliseconds,
+                        "sudo", arguments, _downloadTimeoutMilliseconds,
                         ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
@@ -1697,6 +1717,7 @@ public sealed partial class PackageManager
                 {
                     Report(Loc.T("Upgrading AUR packages (%1 -Sua)…", helper));
                     var arguments = new List<string> { "-Sua", "--noconfirm" };
+                    arguments.AddRange(IgnoreArguments());
                     if (helper == "paru")
                         arguments.Add("--skipreview");
                     AddSudoOverride(arguments, sudoPath);

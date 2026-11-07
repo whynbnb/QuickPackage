@@ -358,6 +358,9 @@
                       <MenuItem Header="{Binding L.Files}"
                                 Command="{Binding ShowPackageFilesCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>
+                      <MenuItem Header="{Binding IgnoreMenuText}"
+                                Command="{Binding ToggleIgnoreCommand}"
+                                CommandParameter="{Binding SelectedPackage}"/>
                       <MenuItem Header="{Binding L.MakeExplicit}"
                                 Command="{Binding MakeExplicitCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>

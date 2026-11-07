@@ -57,6 +57,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _miseEnabled;
     private bool _rustupEnabled;
     private bool _fvmEnabled;
+    private readonly HashSet<string> _ignoredPackages = new(StringComparer.Ordinal);
 
     public MainWindowViewModel(IDialogService dialogs)
     {
@@ -72,6 +73,7 @@ public partial class MainWindowViewModel : ObservableObject
         _checkUpdatesOnStart = _config.GetBool("General", "CheckUpdatesOnStart", true);
         _languageSetting = _config.GetString("General", "Language", "system");
         LoadBackendSettings();
+        LoadIgnoredPackages();
         ApplyBackendSettings();
         RefreshBackendHealth();
 
@@ -260,12 +262,21 @@ public partial class MainWindowViewModel : ObservableObject
     [ObservableProperty]
     private bool _canShowPackageFiles;
 
-    public bool CanMoreActions => CanMakeExplicit || CanShowPackageFiles;
+    [ObservableProperty]
+    private bool _canToggleIgnore;
+
+    [ObservableProperty]
+    private string _ignoreMenuText = string.Empty;
+
+    public bool CanMoreActions => CanMakeExplicit || CanShowPackageFiles || CanToggleIgnore;
 
     partial void OnCanMakeExplicitChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
 
     partial void OnCanShowPackageFilesChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanToggleIgnoreChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
 
     [ObservableProperty]
@@ -1236,6 +1247,7 @@ public partial class MainWindowViewModel : ObservableObject
             _all.Clear();
             foreach (var package in packages.OrderBy(p => p.Name, StringComparer.OrdinalIgnoreCase))
             {
+                package.Ignored = _ignoredPackages.Contains(package.Name);
                 var item = new PackageItemViewModel(package, FilterByGroupCommand);
                 // Keep the footer selection count and action buttons in sync
                 // when a card's checkbox is toggled.
@@ -1379,7 +1391,7 @@ public partial class MainWindowViewModel : ObservableObject
             {
                 foreach (var item in _all)
                 {
-                    if (item.Model.Backend != backend)
+                    if (item.Model.Backend != backend || item.Model.Ignored)
                         continue;
                     if (item.Model.Name != name && item.Model.PackageId != name)
                         continue;
@@ -2093,6 +2105,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         var backendsChanged = viewModel.BackendsChanged;
         LoadBackendSettings();
+        LoadIgnoredPackages();
         ApplyBackendSettings();
         RefreshBackendHealth();
         RefreshModeUi();
@@ -2195,6 +2208,8 @@ public partial class MainWindowViewModel : ObservableObject
             IsInstalledSelectedPackage = false;
             CanMakeExplicit = false;
             CanShowPackageFiles = false;
+            CanToggleIgnore = false;
+            IgnoreMenuText = string.Empty;
             return;
         }
 
@@ -2266,6 +2281,10 @@ public partial class MainWindowViewModel : ObservableObject
             && !model.Explicit;
         CanShowPackageFiles = model.Installed
             && model.Backend is Backend.Pacman or Backend.Aur;
+        CanToggleIgnore = model.Installed;
+        IgnoreMenuText = model.Ignored
+            ? Loc.T("Cancel ignored updates")
+            : Loc.T("Ignore updates");
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);
@@ -2392,6 +2411,43 @@ public partial class MainWindowViewModel : ObservableObject
         _fvmEnabled = _config.GetBool("General", "EnableFvm", false);
     }
 
+    private void LoadIgnoredPackages()
+    {
+        _ignoredPackages.Clear();
+        foreach (var name in _config.GetString("General", "IgnoredPackages")
+                     .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            _ignoredPackages.Add(name);
+        }
+    }
+
+    private void SaveIgnoredPackages()
+    {
+        _config.Set("General", "IgnoredPackages",
+            string.Join(',', _ignoredPackages.OrderBy(name => name, StringComparer.Ordinal)));
+        _manager.SetIgnoredPackages(_ignoredPackages);
+        _config.Save();
+    }
+
+    [RelayCommand]
+    private void ToggleIgnore(PackageItemViewModel? item)
+    {
+        if (item is null || !item.Model.Installed)
+            return;
+        if (!_ignoredPackages.Remove(item.Model.Name))
+            _ignoredPackages.Add(item.Model.Name);
+        item.Model.Ignored = _ignoredPackages.Contains(item.Model.Name);
+        SaveIgnoredPackages();
+        ApplyUpdatesToModels();
+        item.Refresh();
+        ApplyFilter();
+        UpdateCounters();
+        RebuildDetail(item);
+        StatusMessage = item.Model.Ignored
+            ? Loc.T("%1 will no longer be upgraded", item.Name)
+            : Loc.T("%1 will be upgraded again", item.Name);
+    }
+
     private void ApplyBackendSettings()
     {
         _manager.SetBackendEnabled(Backend.Pacman, _pacmanEnabled);
@@ -2406,6 +2462,7 @@ public partial class MainWindowViewModel : ObservableObject
         _manager.SetQueryTimeout(_config.GetInt("General", "CommandTimeout", 30));
         _manager.SetDownloadTimeout(_config.GetInt("General", "DownloadTimeout", 3600));
         _manager.SetNetworkRetries(_config.GetInt("General", "NetworkRetries", 2));
+        _manager.SetIgnoredPackages(_ignoredPackages);
         _online.SetProxy(_proxy);
     }
 }
