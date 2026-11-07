@@ -32,6 +32,8 @@ C# 14 and Avalonia.
 - Stop a running refresh/update/operation with the footer button or `Esc`,
   with separate timeouts for local queries and for update
   checks/downloads/builds
+- Automatically retries update checks and failed downloads/operations on
+  weak connections, and makes makepkg's curl retry truncated transfers
 - Asks for the sudo password inside the app when no cached credentials are
   available, including for the sudo calls that paru/yay make while building
   and installing; a rejected password keeps the prompt open for a retry
@@ -84,9 +86,9 @@ Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 
 - `[General]` — language, theme, startup update check, the local query
   timeout (`CommandTimeout`), the update/download timeout
-  (`DownloadTimeout`), the AUR helper (`paru`/`yay`), the activity log's
-  expanded state, height and detail visibility, and one `Enable*` key per
-  backend
+  (`DownloadTimeout`), the network retry count (`NetworkRetries`), the AUR
+  helper (`paru`/`yay`), the activity log's expanded state, height and
+  detail visibility, and one `Enable*` key per backend
 - `[Proxy]` — mode, host, port and one `Enable*` key per backend
 
 Snapshots are stored next to it in

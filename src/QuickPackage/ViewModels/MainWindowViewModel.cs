@@ -1275,5 +1275,6 @@ public partial class MainWindowViewModel : ObservableObject
         _manager.SetProxy(_proxy);
         _manager.SetQueryTimeout(_config.GetInt("General", "CommandTimeout", 30));
         _manager.SetDownloadTimeout(_config.GetInt("General", "DownloadTimeout", 3600));
+        _manager.SetNetworkRetries(_config.GetInt("General", "NetworkRetries", 2));
     }
 }

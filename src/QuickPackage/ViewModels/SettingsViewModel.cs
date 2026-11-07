@@ -72,6 +72,7 @@ public partial class SettingsViewModel : ObservableObject
         QueryTimeout = Math.Clamp(config.GetInt("General", "CommandTimeout", 30), 5, 600);
         DownloadTimeout = Math.Clamp(
             config.GetInt("General", "DownloadTimeout", 3600), 60, 86_400);
+        NetworkRetries = Math.Clamp(config.GetInt("General", "NetworkRetries", 2), 0, 10);
 
         EnablePacman = _initialPacman = config.GetBool("General", "EnablePacman", true);
         EnableAur = _initialAur = config.GetBool("General", "EnableAur", true);
@@ -109,6 +110,8 @@ public partial class SettingsViewModel : ObservableObject
     public string QueryTimeoutHint => Loc.T("Local package listings and metadata queries.");
     public string DownloadTimeoutLabel => Loc.T("Download/update timeout (s):");
     public string DownloadTimeoutHint => Loc.T("Update checks, downloads, builds, installs and removals.");
+    public string NetworkRetriesLabel => Loc.T("Download retries:");
+    public string NetworkRetriesHint => Loc.T("Retry update checks, downloads and failed operations on unstable connections.");
     public string TimeoutsGroup => Loc.T("Timeouts");
     public string BackendsGroup => Loc.T("Package backends");
     public string EnablePacmanText => Loc.T("Enable pacman");
@@ -154,6 +157,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private decimal _downloadTimeout = 3600;
+
+    [ObservableProperty]
+    private decimal _networkRetries = 2;
 
     [ObservableProperty]
     private bool _enablePacman;
@@ -277,6 +283,7 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "CheckUpdatesOnStart", CheckUpdatesOnStart);
         _config.Set("General", "CommandTimeout", Math.Clamp((int)QueryTimeout, 5, 600));
         _config.Set("General", "DownloadTimeout", Math.Clamp((int)DownloadTimeout, 60, 86_400));
+        _config.Set("General", "NetworkRetries", Math.Clamp((int)NetworkRetries, 0, 10));
         _config.Set("General", "EnablePacman", EnablePacman);
         _config.Set("General", "EnableAur", EnableAur);
         _config.Set("General", "EnableFlatpak", EnableFlatpak);

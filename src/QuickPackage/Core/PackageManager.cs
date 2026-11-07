@@ -30,6 +30,9 @@ public sealed partial class PackageManager
     // allowance than local queries.
     private int _downloadTimeoutMilliseconds = 3_600_000;
 
+    // Extra attempts for network checks and operations on weak connections.
+    private int _networkRetries = 2;
+
     // Only paru and yay are supported; empty means auto-detect.
     private string _preferredAurHelper = string.Empty;
 
@@ -49,6 +52,9 @@ public sealed partial class PackageManager
 
     public void SetDownloadTimeout(int seconds)
         => _downloadTimeoutMilliseconds = Math.Clamp(seconds, 60, 86_400) * 1000;
+
+    public void SetNetworkRetries(int retries)
+        => _networkRetries = Math.Clamp(retries, 0, 10);
 
     /// <summary>Status / progress messages for the status bar.</summary>
     public event Action<string>? Message;
@@ -800,7 +806,7 @@ public sealed partial class PackageManager
 
     private async Task<Dictionary<string, string>> QueryPacmanUpdatesAsync(CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync("checkupdates", [], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await RunNetworkAsync("checkupdates", [], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -820,7 +826,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> AurUpdateNamesAsync(
         string helper, CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
+        var run = await RunNetworkAsync(helper, ["-Qua"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -828,7 +834,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> MiseUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("mise", ["outdated"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
+        var run = await RunNetworkAsync("mise", ["outdated"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
             .ConfigureAwait(false);
         // Rows: "tool requested current latest path" — latest is the 4th token.
         foreach (var rawLine in run.Output.Split('\n'))
@@ -844,7 +850,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> RustupUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("rustup", ["check"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
+        var run = await RunNetworkAsync("rustup", ["check"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
             .ConfigureAwait(false);
         // "<toolchain> - up to date: …" / "<toolchain> - Update available: 1.90.0 (x) -> 1.91.0 (y)"
         foreach (var rawLine in run.Output.Split('\n'))
@@ -875,7 +881,7 @@ public sealed partial class PackageManager
         CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync(
+        var run = await RunNetworkAsync(
             "flatpak", ["remote-ls", "--updates", "--app", "--columns=application,version"],
             _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
         foreach (var rawLine in run.Output.Split('\n'))
@@ -892,7 +898,7 @@ public sealed partial class PackageManager
         CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync(
+        var run = await RunNetworkAsync(
             "cargo", ["install-update", "--list"], _downloadTimeoutMilliseconds,
             ProxyEnvironment(Backend.Cargo), cancellationToken).ConfigureAwait(false);
         // Rows: "name vInstalled vLatest Yes|No" — only Yes needs an update.
@@ -953,6 +959,77 @@ public sealed partial class PackageManager
         return run.Ok;
     }
 
+    /// <summary>
+    /// Runs a network-facing command and retries it when the failure looks
+    /// like a broken or slow connection instead of a real error.
+    /// </summary>
+    private async Task<CommandRunner.Result> RunNetworkAsync(
+        string executable,
+        IEnumerable<string> arguments,
+        int timeoutMilliseconds,
+        IReadOnlyDictionary<string, string?>? environment,
+        CancellationToken cancellationToken,
+        bool operation = false)
+    {
+        var argumentList = arguments as IReadOnlyList<string> ?? arguments.ToList();
+        var maxRetries = Math.Clamp(_networkRetries, 0, 10);
+        var run = new CommandRunner.Result(false, string.Empty);
+
+        for (var attempt = 0; attempt <= maxRetries; ++attempt)
+        {
+            run = await CommandRunner.RunAsync(
+                executable, argumentList, timeoutMilliseconds, environment, cancellationToken,
+                operation: operation).ConfigureAwait(false);
+
+            if (run.Ok || attempt == maxRetries || cancellationToken.IsCancellationRequested)
+                return run;
+            if (!LooksLikeNetworkFailure(run.Output))
+                return run;
+
+            var retry = attempt + 1;
+            Report(Loc.T("Network error, retrying (%1/%2)…", retry, maxRetries));
+            try
+            {
+                await Task.Delay(TimeSpan.FromSeconds(Math.Min(2 * retry, 10)), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                return run;
+            }
+        }
+
+        return run;
+    }
+
+    private static bool LooksLikeNetworkFailure(string output)
+    {
+        if (output.Length == 0)
+            return false;
+
+        foreach (var marker in NetworkFailureMarkers)
+        {
+            if (output.Contains(marker, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static readonly string[] NetworkFailureMarkers =
+    [
+        "curl: (", "curl error", "could not resolve", "couldn't resolve",
+        "failed to connect", "connection timed out", "connection reset",
+        "connection refused", "network is unreachable", "no route to host",
+        "temporary failure in name resolution", "resolving timed out",
+        "operation too slow", "transfer closed", "end of response",
+        "bytes missing", "partial file", "ssl connect", "tls handshake",
+        "failed to retrieve", "failed to download", "error downloading",
+        "the requested url returned error: 5", "http/2 stream",
+        "下载失败", "无法下载", "未能下载", "下载中断", "网络错误",
+        "网络连接", "网络不可达", "连接超时", "连接失败", "超时",
+        "响应结束", "传输中断",
+    ];
+
     private sealed class OperationState
     {
         public bool Ok { get; set; } = true;
@@ -993,6 +1070,17 @@ public sealed partial class PackageManager
             : null;
         var sudoPath = askpass?.SudoPath;
 
+        // AUR builds download sources through makepkg/curl. Weak links drop
+        // large transfers with "end of response ... bytes missing", which
+        // curl does not retry by default; give makepkg a temporary config
+        // that retries every transfer error.
+        using var makepkgConf = packages.Any(package => package.Backend == Backend.Aur)
+            ? MakepkgRetryConfig.Create(_networkRetries)
+            : null;
+        var aurEnvironment = makepkgConf is null
+            ? ProxyEnvironment(Backend.Aur)
+            : EnvironmentWith(Backend.Aur, ("MAKEPKG_CONF", makepkgConf.Path));
+
         // Pacman must never be partially updated: one full "-Syu" upgrades the
         // whole system. AUR packages get one helper pass; mise/rustup one
         // tool upgrade pass each.
@@ -1003,7 +1091,7 @@ public sealed partial class PackageManager
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     Report(Loc.T("Upgrading system (pacman -Syu)…"));
-                    var run = await CommandRunner.RunAsync(
+                    var run = await RunNetworkAsync(
                         "sudo", ["pacman", "-Syu", "--noconfirm"], _downloadTimeoutMilliseconds,
                         ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true)
                         .ConfigureAwait(false);
@@ -1032,8 +1120,9 @@ public sealed partial class PackageManager
                     if (helper == "paru")
                         arguments.Add("--skipreview");
                     AddSudoOverride(arguments, sudoPath);
-                    var run = await CommandRunner.RunAsync(helper, arguments, _downloadTimeoutMilliseconds,
-                        ProxyEnvironment(Backend.Aur), cancellationToken, operation: true)
+                    var run = await RunNetworkAsync(
+                        helper, arguments, _downloadTimeoutMilliseconds,
+                        aurEnvironment, cancellationToken, operation: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
                     {
@@ -1047,7 +1136,7 @@ public sealed partial class PackageManager
             if (packages.Any(p => p.Backend == Backend.Mise) && !cancellationToken.IsCancellationRequested)
             {
                 Report(Loc.T("Upgrading mise tools (mise upgrade)…"));
-                var run = await CommandRunner.RunAsync(
+                var run = await RunNetworkAsync(
                     "mise", ["upgrade"], _downloadTimeoutMilliseconds,
                     ProxyEnvironment(Backend.Mise), cancellationToken, operation: true).ConfigureAwait(false);
                 if (!run.Ok)
@@ -1061,7 +1150,7 @@ public sealed partial class PackageManager
             if (packages.Any(p => p.Backend == Backend.Rustup) && !cancellationToken.IsCancellationRequested)
             {
                 Report(Loc.T("Upgrading rustup toolchains (rustup update)…"));
-                var run = await CommandRunner.RunAsync(
+                var run = await RunNetworkAsync(
                     "rustup", ["update"], _downloadTimeoutMilliseconds,
                     ProxyEnvironment(Backend.Rustup), cancellationToken, operation: true).ConfigureAwait(false);
                 if (!run.Ok)
@@ -1098,8 +1187,16 @@ public sealed partial class PackageManager
                 PackageOperation.Install => Loc.T("Installing %1…", package.Name),
                 _ => Loc.T("Updating %1…", package.Name),
             });
-            var run = await CommandRunner.RunAsync(arguments[0], arguments.Skip(1), _downloadTimeoutMilliseconds,
-                ProxyEnvironment(package.Backend), cancellationToken, operation: true).ConfigureAwait(false);
+            var environment = package.Backend == Backend.Aur
+                ? aurEnvironment
+                : ProxyEnvironment(package.Backend);
+            var run = operation == PackageOperation.Remove
+                ? await CommandRunner.RunAsync(
+                    arguments[0], arguments.Skip(1), _downloadTimeoutMilliseconds,
+                    environment, cancellationToken, operation: true).ConfigureAwait(false)
+                : await RunNetworkAsync(
+                    arguments[0], arguments.Skip(1), _downloadTimeoutMilliseconds,
+                    environment, cancellationToken, operation: true).ConfigureAwait(false);
             if (!run.Ok)
             {
                 state.Ok = false;

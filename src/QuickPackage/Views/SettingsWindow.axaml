@@ -30,7 +30,7 @@
         </Grid>
 
         <GroupBox Header="{Binding TimeoutsGroup}">
-          <Grid ColumnDefinitions="230,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+          <Grid ColumnDefinitions="230,*" RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
             <TextBlock Text="{Binding QueryTimeoutLabel}" VerticalAlignment="Center"/>
             <NumericUpDown Grid.Column="1" Value="{Binding QueryTimeout, Mode=TwoWay}"
                            Minimum="5" Maximum="600" Increment="5" FormatString="0"
@@ -42,6 +42,12 @@
                            Minimum="60" Maximum="86400" Increment="60" FormatString="0"
                            HorizontalAlignment="Left" Width="160"/>
             <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding DownloadTimeoutHint}"
+                       FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,-2,0,4"/>
+            <TextBlock Grid.Row="4" Text="{Binding NetworkRetriesLabel}" VerticalAlignment="Center"/>
+            <NumericUpDown Grid.Row="4" Grid.Column="1" Value="{Binding NetworkRetries, Mode=TwoWay}"
+                           Minimum="0" Maximum="10" Increment="1" FormatString="0"
+                           HorizontalAlignment="Left" Width="160"/>
+            <TextBlock Grid.Row="5" Grid.ColumnSpan="2" Text="{Binding NetworkRetriesHint}"
                        FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,-2,0,0"/>
           </Grid>
         </GroupBox>
