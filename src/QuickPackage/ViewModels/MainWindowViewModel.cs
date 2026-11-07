@@ -101,6 +101,7 @@ public partial class MainWindowViewModel : ObservableObject
         _suppressOriginChange = false;
         StatusMessage = Loc.T("Ready");
         BuildChips();
+        BuildSortOptions();
         RefreshModeUi();
         UpdateCounters();
     }
@@ -325,6 +326,62 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _suppressOriginChange;
 
     public ObservableCollection<string> OriginOptions { get; } = [];
+
+    public ObservableCollection<OptionItem> SortOptions { get; } = [];
+
+    private bool _suppressSortChange;
+
+    [ObservableProperty]
+    private OptionItem? _selectedSortOption;
+
+    [ObservableProperty]
+    private bool _sortDescending;
+
+    public string SortDirectionText => SortDescending ? "↓" : "↑";
+
+    partial void OnSelectedSortOptionChanged(OptionItem? value)
+    {
+        if (_suppressSortChange)
+            return;
+        SaveSort();
+        ApplyFilter();
+    }
+
+    partial void OnSortDescendingChanged(bool value)
+    {
+        OnPropertyChanged(nameof(SortDirectionText));
+        if (_suppressSortChange)
+            return;
+        SaveSort();
+        ApplyFilter();
+    }
+
+    private void BuildSortOptions()
+    {
+        SortOptions.Add(new OptionItem { Value = "name", Label = Loc.T("Name") });
+        SortOptions.Add(new OptionItem { Value = "size", Label = Loc.T("Installed size") });
+        SortOptions.Add(new OptionItem { Value = "download", Label = Loc.T("Download size") });
+        SortOptions.Add(new OptionItem { Value = "installdate", Label = Loc.T("Install date") });
+        SortOptions.Add(new OptionItem { Value = "builddate", Label = Loc.T("Build date") });
+        SortOptions.Add(new OptionItem { Value = "origin", Label = Loc.T("Origin") });
+        SortOptions.Add(new OptionItem { Value = "updates", Label = Loc.T("Update status") });
+
+        var saved = _config.GetString("General", "SortKey", "name");
+        _suppressSortChange = true;
+        SelectedSortOption = SortOptions.FirstOrDefault(option => option.Value == saved) ?? SortOptions[0];
+        SortDescending = _config.GetBool("General", "SortDescending", false);
+        _suppressSortChange = false;
+    }
+
+    private void SaveSort()
+    {
+        _config.Set("General", "SortKey", SelectedSortOption?.Value ?? "name");
+        _config.Set("General", "SortDescending", SortDescending);
+        _config.Save();
+    }
+
+    [RelayCommand]
+    private void ToggleSortDirection() => SortDescending = !SortDescending;
 
     public string AllOriginsLabel => _allOriginsLabel;
 
@@ -723,11 +780,39 @@ public partial class MainWindowViewModel : ObservableObject
             if (Accepts(item))
                 filtered.Add(item);
         }
+        filtered.Sort(ComparePackages);
         Packages.Clear();
         foreach (var item in filtered)
             Packages.Add(item);
         OnPropertyChanged(nameof(ShowEmpty));
     }
+
+    private int ComparePackages(PackageItemViewModel left, PackageItemViewModel right)
+    {
+        var a = left.Model;
+        var b = right.Model;
+        var key = SelectedSortOption?.Value ?? "name";
+        var result = key switch
+        {
+            "size" => HumanSize.Parse(a.Size).CompareTo(HumanSize.Parse(b.Size)),
+            "download" => HumanSize.Parse(a.DownloadSize).CompareTo(HumanSize.Parse(b.DownloadSize)),
+            "installdate" => ParseDate(a.InstallDate).CompareTo(ParseDate(b.InstallDate)),
+            "builddate" => ParseDate(a.BuildDate).CompareTo(ParseDate(b.BuildDate)),
+            "origin" => string.Compare(a.Origin, b.Origin, StringComparison.OrdinalIgnoreCase),
+            "updates" => (a.Status == PackageStatus.NeedsUpdate ? 1 : 0)
+                .CompareTo(b.Status == PackageStatus.NeedsUpdate ? 1 : 0),
+            _ => string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase),
+        };
+        if (result == 0)
+            result = string.Compare(a.Name, b.Name, StringComparison.OrdinalIgnoreCase);
+        return SortDescending ? -result : result;
+    }
+
+    private static DateTime ParseDate(string value)
+        => DateTime.TryParse(value, CultureInfo.InvariantCulture,
+            DateTimeStyles.AllowWhiteSpaces, out var date)
+            ? date
+            : DateTime.MinValue;
 
     private bool Accepts(PackageItemViewModel item)
     {

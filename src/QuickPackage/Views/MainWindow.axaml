@@ -118,6 +118,13 @@
               Margin="0,0,10,4"/>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
                   VerticalAlignment="Center">
+        <ComboBox ItemsSource="{Binding SortOptions}"
+                  SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
+                  MinWidth="112" FontSize="12" VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding L.SortByHint}"/>
+        <Button Classes="ghost" Content="{Binding SortDirectionText}" FontSize="13"
+                Padding="7,1" Command="{Binding ToggleSortDirectionCommand}"
+                ToolTip.Tip="{Binding L.SortDirectionHint}"/>
         <ComboBox ItemsSource="{Binding OriginOptions}"
                   SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
                   MinWidth="128" FontSize="12" VerticalAlignment="Center"

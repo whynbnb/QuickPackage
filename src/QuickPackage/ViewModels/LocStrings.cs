@@ -56,6 +56,8 @@ public sealed class LocStrings : ObservableObject
     public string NotInstalledOnly => Loc.T("Not installed");
     public string AllPackages => Loc.T("All packages");
     public string OriginFilterHint => Loc.T("Filter by package origin");
+    public string SortByHint => Loc.T("Sort the package list");
+    public string SortDirectionHint => Loc.T("Toggle the sort direction");
     public string Back => Loc.T("Back");
     public string Forward => Loc.T("Forward");
     public string DependsOnDeps => Loc.T("Depends on");
