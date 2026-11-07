@@ -500,7 +500,11 @@
                    VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6"
                     VerticalAlignment="Center" IsVisible="{Binding IsBusy}">
-          <ProgressBar IsIndeterminate="True" Width="80" Height="4" VerticalAlignment="Center"/>
+          <ProgressBar IsIndeterminate="{Binding !HasProgress}"
+                       Value="{Binding ProgressPercent}" Maximum="100"
+                       Width="80" Height="4" VerticalAlignment="Center"/>
+          <TextBlock Text="{Binding ProgressText}" Classes="subtle" FontSize="11"
+                     VerticalAlignment="Center" IsVisible="{Binding HasProgress}"/>
           <Button Classes="ghost" Content="{Binding L.Stop}" FontSize="11"
                   Padding="8,1" Foreground="#E5534B" Command="{Binding StopCommand}"
                   ToolTip.Tip="{Binding L.Stop}"/>

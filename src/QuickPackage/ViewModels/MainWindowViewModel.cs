@@ -186,6 +186,15 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _isBusy;
 
     [ObservableProperty]
+    private double _progressPercent;
+
+    [ObservableProperty]
+    private bool _hasProgress;
+
+    [ObservableProperty]
+    private string _progressText = string.Empty;
+
+    [ObservableProperty]
     private string _selectionText = string.Empty;
 
     [ObservableProperty]
@@ -1186,6 +1195,9 @@ public partial class MainWindowViewModel : ObservableObject
     private void BeginBusy()
     {
         IsBusy = true;
+        ProgressPercent = 0;
+        HasProgress = false;
+        ProgressText = string.Empty;
         foreach (var chip in Chips)
             chip.IsEnabled = false;
     }
@@ -1193,6 +1205,9 @@ public partial class MainWindowViewModel : ObservableObject
     private void EndBusy()
     {
         IsBusy = false;
+        ProgressPercent = 0;
+        HasProgress = false;
+        ProgressText = string.Empty;
         _operationCts?.Dispose();
         _operationCts = null;
         foreach (var chip in Chips)
@@ -1927,8 +1942,27 @@ public partial class MainWindowViewModel : ObservableObject
             if (!_commandsByActivity.TryGetValue(activity.Id, out var item))
                 return;
             item.Append(activity.Text);
+            if (IsBusy)
+                UpdateProgress(activity.Text);
             _logDirty = true;
         });
+    }
+
+    /// <summary>Uses the last percentage in a command batch for the footer bar.</summary>
+    private void UpdateProgress(string text)
+    {
+        var last = -1;
+        foreach (System.Text.RegularExpressions.Match match in
+                 System.Text.RegularExpressions.Regex.Matches(text, @"(\d{1,3})\s*%"))
+        {
+            if (int.TryParse(match.Groups[1].Value, out var value))
+                last = Math.Clamp(value, 0, 100);
+        }
+        if (last < 0)
+            return;
+        HasProgress = true;
+        ProgressPercent = last;
+        ProgressText = last + "%";
     }
 
     private void OnCommandFinished(CommandFinished activity)
