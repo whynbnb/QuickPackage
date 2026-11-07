@@ -254,6 +254,42 @@ public sealed partial class PackageManager
         return run;
     }
 
+    /// <summary>
+    /// Downloads fresh repository metadata. This is kept separate from the
+    /// list reload because a partial upgrade (sync without upgrading) is
+    /// discouraged; the UI warns before calling it.
+    /// </summary>
+    public async Task<CommandRunner.Result> SyncDatabasesAsync(CancellationToken cancellationToken)
+    {
+        var messages = new List<string>();
+
+        if (_enabled[Backend.Pacman] || _enabled[Backend.Aur])
+        {
+            if (!(await EnsureSudoAsync(cancellationToken).ConfigureAwait(false)).Ok)
+                return new CommandRunner.Result(false, Loc.T("Authentication failed"));
+
+            Report(Loc.T("Syncing package databases…"));
+            var run = await RunNetworkAsync(
+                "sudo", ["pacman", "-Sy", "--noconfirm"], _downloadTimeoutMilliseconds,
+                ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true).ConfigureAwait(false);
+            if (!run.Ok)
+                return run;
+            messages.Add("pacman");
+        }
+
+        if (_enabled[Backend.Flatpak])
+        {
+            var run = await RunNetworkAsync(
+                "flatpak", ["update", "--appstream"], _downloadTimeoutMilliseconds,
+                ProxyEnvironment(Backend.Flatpak), cancellationToken, operation: true).ConfigureAwait(false);
+            if (!run.Ok && run.Output.Length > 0)
+                messages.Add(run.Output.Trim());
+        }
+
+        Report(Loc.T("Databases synced"));
+        return new CommandRunner.Result(true, string.Join("\n", messages));
+    }
+
     /// <summary>Currently installed pacman package versions (repo + foreign).</summary>
     public async Task<Dictionary<string, string>> GetInstalledVersionsAsync(CancellationToken cancellationToken)
     {

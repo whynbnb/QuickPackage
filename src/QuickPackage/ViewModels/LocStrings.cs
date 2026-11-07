@@ -21,6 +21,7 @@ public sealed class LocStrings : ObservableObject
     public string About => Loc.T("About");
 
     public string RefreshLists => Loc.T("Refresh Lists");
+    public string SyncDatabases => Loc.T("Sync databases");
     public string CheckForUpdates => Loc.T("Check for Updates");
     public string InstallSelected => Loc.T("Install Selected");
     public string RemoveSelected => Loc.T("Remove Selected");

@@ -901,6 +901,50 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task SyncDatabasesAsync()
+    {
+        if (IsBusy)
+            return;
+        var confirmed = await _dialogs.ConfirmAsync(
+            Loc.T("Sync databases"),
+            Loc.T("Download fresh repository metadata now? Syncing and then installing only some packages can cause a partial upgrade, so run a full system upgrade afterwards."),
+            Loc.T("OK"), Loc.T("Cancel"));
+        if (!confirmed)
+            return;
+
+        BeginBusy();
+        var cts = new CancellationTokenSource();
+        _operationCts = cts;
+        var ok = false;
+        try
+        {
+            StatusMessage = Loc.T("Syncing package databases…");
+            var run = await _manager.SyncDatabasesAsync(cts.Token);
+            ok = run.Ok;
+            StatusMessage = ok
+                ? Loc.T("Databases synced")
+                : Loc.T("Failed: %1", run.Output.Trim());
+        }
+        catch (OperationCanceledException)
+        {
+            StatusMessage = Loc.T("Cancelled");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+
+        if (!ok)
+            return;
+        await RefreshAsync();
+        await CheckUpdatesAsync();
+    }
+
+    [RelayCommand]
     private async Task CheckUpdatesAsync()
     {
         if (IsBusy)

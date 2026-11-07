@@ -25,6 +25,7 @@
       </MenuItem>
       <MenuItem Header="{Binding L.Packages}">
         <MenuItem Header="{Binding L.RefreshLists}" InputGesture="F5" Command="{Binding RefreshCommand}"/>
+        <MenuItem Header="{Binding L.SyncDatabases}" Command="{Binding SyncDatabasesCommand}"/>
         <MenuItem Header="{Binding L.CheckForUpdates}" InputGesture="Ctrl+U" Command="{Binding CheckUpdatesCommand}"/>
         <Separator/>
         <MenuItem Header="{Binding L.Snapshots}" Command="{Binding SnapshotsCommand}"/>
