@@ -49,8 +49,8 @@
       </MenuItem>
     </Menu>
 
-    <!-- Top bar: package mode, the long search field and contextual actions. -->
-    <Grid Grid.Row="1" ColumnDefinitions="Auto,*,Auto" Margin="12,6,12,4" ColumnSpacing="10">
+    <!-- Top bar: package mode, sort, the long search field and contextual actions. -->
+    <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,*,Auto" Margin="12,6,12,4" ColumnSpacing="10">
       <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="4">
         <ToggleButton Classes="mode" Content="{Binding L.SystemPackages}"
                       IsChecked="{Binding IsSystemMode, Mode=TwoWay}"/>
@@ -59,7 +59,18 @@
                       IsVisible="{Binding HasDevBackends}"/>
       </StackPanel>
 
-      <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="6">
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2"
+                  VerticalAlignment="Center">
+        <ComboBox ItemsSource="{Binding SortOptions}"
+                  SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
+                  MinWidth="104" FontSize="12" VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding L.SortByHint}"/>
+        <Button Classes="ghost" Content="{Binding SortDirectionText}" FontSize="13"
+                Padding="7,1" Command="{Binding ToggleSortDirectionCommand}"
+                ToolTip.Tip="{Binding L.SortDirectionHint}"/>
+      </StackPanel>
+
+      <Grid Grid.Column="2" ColumnDefinitions="*,Auto" ColumnSpacing="6">
         <TextBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay}"
                  KeyDown="OnSearchKeyDown"
                  PlaceholderText="{Binding L.SearchPackages}" VerticalAlignment="Center"/>
@@ -94,7 +105,7 @@
       </Grid>
 
       <!-- Actions live beside the search field so they never consume list height. -->
-      <WrapPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right"
+      <WrapPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right"
                  VerticalAlignment="Center">
         <ComboBox ItemsSource="{Binding ReasonOptions}"
                   SelectedItem="{Binding SelectedReasonOption, Mode=TwoWay}"
@@ -167,13 +178,6 @@
               Margin="0,0,10,4"/>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
                   VerticalAlignment="Center">
-        <ComboBox ItemsSource="{Binding SortOptions}"
-                  SelectedItem="{Binding SelectedSortOption, Mode=TwoWay}"
-                  MinWidth="112" FontSize="12" VerticalAlignment="Center"
-                  ToolTip.Tip="{Binding L.SortByHint}"/>
-        <Button Classes="ghost" Content="{Binding SortDirectionText}" FontSize="13"
-                Padding="7,1" Command="{Binding ToggleSortDirectionCommand}"
-                ToolTip.Tip="{Binding L.SortDirectionHint}"/>
         <ComboBox ItemsSource="{Binding OriginOptions}"
                   SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
                   MinWidth="128" FontSize="12" VerticalAlignment="Center"
