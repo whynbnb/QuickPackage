@@ -413,6 +413,10 @@
                                 Command="{Binding DowngradePackageCommand}"
                                 CommandParameter="{Binding SelectedPackage}"
                                 IsVisible="{Binding CanDowngrade}"/>
+                      <MenuItem Header="{Binding L.DependencyTree}"
+                                Command="{Binding ShowDependencyTreeCommand}"
+                                CommandParameter="{Binding SelectedPackage}"
+                                IsVisible="{Binding CanShowDependencyTree}"/>
                       <MenuItem Header="{Binding L.MakeExplicit}"
                                 Command="{Binding MakeExplicitCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>

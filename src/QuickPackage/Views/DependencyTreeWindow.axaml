@@ -1,0 +1,46 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.DependencyTreeWindow"
+        x:DataType="vm:DependencyTreeViewModel"
+        Width="640" Height="640"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="2">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <TextBlock Grid.Row="1" Text="{Binding SummaryText}" Classes="subtle" FontSize="12"/>
+
+    <Border Grid.Row="2" Classes="pane" ClipToBounds="True">
+      <Grid Margin="10">
+        <TreeView ItemsSource="{Binding Roots}" Background="Transparent" BorderThickness="0"
+                  IsVisible="{Binding HasRoots}"
+                  ScrollViewer.VerticalScrollBarVisibility="Auto"
+                  ScrollViewer.HorizontalScrollBarVisibility="Auto">
+          <TreeView.ItemTemplate>
+            <TreeDataTemplate x:DataType="vm:DependencyNodeViewModel"
+                              ItemsSource="{Binding Children}">
+              <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,2">
+                <TextBlock Text="{Binding Name}" FontSize="12"
+                           Foreground="{Binding Foreground}"/>
+                <TextBlock Text="{Binding VersionText}" Classes="subtle" FontSize="11"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding Note}" Classes="subtle" FontSize="11"
+                           VerticalAlignment="Center"/>
+              </StackPanel>
+            </TreeDataTemplate>
+          </TreeView.ItemTemplate>
+        </TreeView>
+        <TextBlock Text="{Binding EmptyText}" Classes="subtle"
+                   IsVisible="{Binding !HasRoots}" FontSize="12"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+
+    <Button Grid.Row="3" Content="{Binding CloseText}" MinWidth="88"
+            HorizontalAlignment="Right" IsDefault="True" Click="OnClose"/>
+  </Grid>
+</Window>

@@ -294,6 +294,12 @@ public partial class MainWindow : Window, IDialogService
         return await dialog.ShowDialog<bool>(this);
     }
 
+    public async Task ShowDependencyTreeAsync(DependencyTreeViewModel viewModel)
+    {
+        var dialog = new DependencyTreeWindow { DataContext = viewModel };
+        await dialog.ShowDialog(this);
+    }
+
     public async Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null)
     {

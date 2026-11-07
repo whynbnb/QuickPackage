@@ -277,11 +277,14 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _canDowngrade;
 
     [ObservableProperty]
+    private bool _canShowDependencyTree;
+
+    [ObservableProperty]
     private string _ignoreMenuText = string.Empty;
 
     public bool CanMoreActions =>
         CanMakeExplicit || CanShowPackageFiles || CanToggleIgnore
-        || CanDownload || CanReinstall || CanDowngrade;
+        || CanDownload || CanReinstall || CanDowngrade || CanShowDependencyTree;
 
     partial void OnCanMakeExplicitChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
@@ -299,6 +302,9 @@ public partial class MainWindowViewModel : ObservableObject
         => OnPropertyChanged(nameof(CanMoreActions));
 
     partial void OnCanDowngradeChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanShowDependencyTreeChanged(bool value)
         => OnPropertyChanged(nameof(CanMoreActions));
 
     [ObservableProperty]
@@ -2118,6 +2124,62 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ShowDependencyTreeAsync(PackageItemViewModel? item)
+    {
+        if (item is null)
+            return;
+        var viewModel = BuildDependencyTree(item.Model);
+        await _dialogs.ShowDependencyTreeAsync(viewModel);
+    }
+
+    private DependencyTreeViewModel BuildDependencyTree(Package root)
+    {
+        var path = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { root.Name };
+        var count = 0;
+
+        List<DependencyNodeViewModel> Build(Package package, int depth)
+        {
+            var nodes = new List<DependencyNodeViewModel>();
+            if (depth >= 4)
+                return nodes;
+
+            foreach (var raw in package.Depends.Split(
+                         (char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+            {
+                var cut = raw.IndexOfAny(['<', '>', '=']);
+                var name = (cut >= 0 ? raw[..cut] : raw).Trim();
+                if (name.Length == 0 || name.Equals("None", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                var target = FindPackage(name);
+                var node = new DependencyNodeViewModel
+                {
+                    Name = name,
+                    VersionText = target?.Model.Version ?? string.Empty,
+                    Note = target is null
+                        ? Loc.T("not installed")
+                        : path.Contains(target.Model.Name) ? Loc.T("cycle") : string.Empty,
+                };
+                ++count;
+
+                if (target is not null
+                    && !path.Contains(target.Model.Name)
+                    && path.Add(target.Model.Name))
+                {
+                    foreach (var child in Build(target.Model, depth + 1))
+                        node.Children.Add(child);
+                    path.Remove(target.Model.Name);
+                }
+                nodes.Add(node);
+            }
+            return nodes;
+        }
+
+        var roots = Build(root, 0);
+        return new DependencyTreeViewModel(root.Name, roots, count);
+    }
+
+    [RelayCommand]
     private async Task MakeExplicitAsync(PackageItemViewModel? item)
     {
         if (item is null || IsBusy)
@@ -2440,6 +2502,7 @@ public partial class MainWindowViewModel : ObservableObject
             CanDownload = false;
             CanReinstall = false;
             CanDowngrade = false;
+            CanShowDependencyTree = false;
             IgnoreMenuText = string.Empty;
             return;
         }
@@ -2517,6 +2580,8 @@ public partial class MainWindowViewModel : ObservableObject
         CanReinstall = model.Installed;
         CanDowngrade = model.Installed
             && model.Backend is Backend.Pacman or Backend.Aur;
+        CanShowDependencyTree = model.Backend is Backend.Pacman or Backend.Aur
+            && model.Depends.Length > 0;
         IgnoreMenuText = model.Ignored
             ? Loc.T("Cancel ignored updates")
             : Loc.T("Ignore updates");
