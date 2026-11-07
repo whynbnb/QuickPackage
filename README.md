@@ -43,8 +43,9 @@ C# 14 and Avalonia.
 - A collapsible, resizable **activity log** at the bottom shows the commands
   being run and their live output, grouped per command so parallel commands
   never interleave, with a sticky header that keeps the current command in
-  view; detail visibility, panel state and height are remembered
-  (copy/clear included)
+  view; expected non-zero results such as "no orphans" or "no updates" are
+  shown as neutral notes instead of failures, while detail visibility, panel
+  state and height are remembered (copy/clear included)
 - Proxy support (HTTP or SOCKS5) with per-backend enable switches
 - Light / dark / system theme and English / Simplified Chinese UI
 - `quickpackagerc` settings in the established format, so existing

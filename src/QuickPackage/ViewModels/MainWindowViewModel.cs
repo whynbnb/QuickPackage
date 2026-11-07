@@ -1134,7 +1134,8 @@ public partial class MainWindowViewModel : ObservableObject
         AddLog(() =>
         {
             if (_commandsByActivity.Remove(activity.Id, out var item))
-                item.Finish(activity.Ok, activity.ExitCode, activity.Reason);
+                item.Finish(
+                    activity.Ok, activity.ExitCode, activity.Reason, activity.ExpectedNoteKey);
             _activeCommands.Remove(activity.Id);
             UpdateCurrentCommand();
             _logDirty = true;

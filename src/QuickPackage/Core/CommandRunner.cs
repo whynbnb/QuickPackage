@@ -7,7 +7,15 @@ namespace QuickPackage.Core;
 /// <summary>Runs external commands with a merged stdout+stderr capture and a timeout.</summary>
 public static class CommandRunner
 {
-    public sealed record Result(bool Ok, string Output);
+    public sealed record Result(bool Ok, string Output, int ExitCode = -1);
+
+    /// <summary>
+    /// A non-zero exit that is part of a command's normal protocol, such as
+    /// "no orphans" (1) or "no updates" (2). The note key is localized by
+    /// the activity log instead of being shown as a failure.
+    /// </summary>
+    public sealed record ExpectedExit(
+        int ExitCode, string NoteKey, bool RequireEmptyOutput = false);
 
     // Query commands such as "pacman -Qi" can print tens of thousands of
     // lines. Batch them so the UI sees a handful of updates per second
@@ -24,7 +32,8 @@ public static class CommandRunner
         IReadOnlyDictionary<string, string?>? extraEnvironment = null,
         CancellationToken cancellationToken = default,
         bool operation = false,
-        string? standardInput = null)
+        string? standardInput = null,
+        IReadOnlyCollection<ExpectedExit>? expectedExits = null)
     {
         var argumentList = arguments as IReadOnlyList<string> ?? arguments.ToList();
         var commandLine = FormatCommand(executable, argumentList);
@@ -67,7 +76,6 @@ public static class CommandRunner
             process = Process.Start(startInfo);
             if (process is null)
                 return new Result(false, string.Empty);
-
             if (standardInput is not null)
             {
                 try
@@ -97,13 +105,13 @@ public static class CommandRunner
                     : CommandEndReason.TimedOut;
                 TryKill(process);
                 await SafeAwaitAsync(stdoutTask, stderrTask);
-                return new Result(false, Snapshot());
+                return new Result(false, Snapshot(), exitCode);
             }
 
             await SafeAwaitAsync(stdoutTask, stderrTask);
             exitCode = process.ExitCode;
             ok = exitCode == 0;
-            return new Result(ok, Snapshot());
+            return new Result(ok, Snapshot(), exitCode);
         }
         catch (Exception exception)
         {
@@ -113,8 +121,13 @@ public static class CommandRunner
         finally
         {
             process?.Dispose();
+            var expectedNote = expectedExits?
+                .FirstOrDefault(expected => expected.ExitCode == exitCode
+                    && (!expected.RequireEmptyOutput || Snapshot().Length == 0))?.NoteKey;
             CommandActivity.RaiseFinished(
-                new CommandFinished(activityId, commandLine, operation, ok, exitCode, endReason));
+                new CommandFinished(
+                    activityId, commandLine, operation, ok, exitCode, endReason,
+                    expectedNote));
         }
 
         // Read both streams concurrently: awaiting one stream fully would

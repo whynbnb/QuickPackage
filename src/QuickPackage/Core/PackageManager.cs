@@ -310,9 +310,13 @@ public sealed partial class PackageManager
         Dictionary<(Backend, string), Package> lookup, List<Package> loaded,
         CancellationToken cancellationToken)
     {
+        var expected = query == "-Qm"
+            ? new[] { new CommandRunner.ExpectedExit(1, "No AUR packages", RequireEmptyOutput: true) }
+            : null;
         var run = await CommandRunner.RunAsync(
             "pacman", [query], _queryTimeoutMilliseconds,
-            ProxyEnvironment(backend), cancellationToken).ConfigureAwait(false);
+            ProxyEnvironment(backend), cancellationToken,
+            expectedExits: expected).ConfigureAwait(false);
         if (!run.Ok)
         {
             AddSnapshotFallback(entries, loaded, backend);
@@ -519,7 +523,8 @@ public sealed partial class PackageManager
         }
         var enabled = new List<Package>(result.Count);
         var orphanRun = await CommandRunner.RunAsync(
-            "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken).ConfigureAwait(false);
+            "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken,
+            expectedExits: [new CommandRunner.ExpectedExit(1, "No orphans", RequireEmptyOutput: true)]).ConfigureAwait(false);
         var orphans = new HashSet<string>(StringComparer.Ordinal);
         foreach (var rawLine in orphanRun.Output.Split('\n'))
         {
@@ -808,9 +813,12 @@ public sealed partial class PackageManager
 
     private async Task<Dictionary<string, string>> QueryPacmanUpdatesAsync(CancellationToken cancellationToken)
     {
-        var run = await RunNetworkAsync("checkupdates", [], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await RunNetworkAsync("checkupdates", [], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken,
+            expectedExits: [new CommandRunner.ExpectedExit(2, "No updates", RequireEmptyOutput: true)])
             .ConfigureAwait(false);
-        return ParseUpdateLines(run.Output);
+        return run.Ok || (run.ExitCode == 2 && run.Output.Length == 0)
+            ? ParseUpdateLines(run.Output)
+            : [];
     }
 
     /// <summary>Configured AUR helper, falling back to whichever one is installed.</summary>
@@ -828,9 +836,12 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> AurUpdateNamesAsync(
         string helper, CancellationToken cancellationToken)
     {
-        var run = await RunNetworkAsync(helper, ["-Qua"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
+        var run = await RunNetworkAsync(helper, ["-Qua"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken,
+            expectedExits: [new CommandRunner.ExpectedExit(1, "No updates", RequireEmptyOutput: true)])
             .ConfigureAwait(false);
-        return ParseUpdateLines(run.Output);
+        return run.Ok || (run.ExitCode == 1 && run.Output.Length == 0)
+            ? ParseUpdateLines(run.Output)
+            : [];
     }
 
     private async Task<Dictionary<string, string>> MiseUpdateNamesAsync(CancellationToken cancellationToken)
@@ -838,6 +849,8 @@ public sealed partial class PackageManager
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
         var run = await RunNetworkAsync("mise", ["outdated"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
             .ConfigureAwait(false);
+        if (!run.Ok)
+            return updates;
         // Rows: "tool requested current latest path" — latest is the 4th token.
         foreach (var rawLine in run.Output.Split('\n'))
         {
@@ -852,8 +865,11 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> RustupUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await RunNetworkAsync("rustup", ["check"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
+        var run = await RunNetworkAsync("rustup", ["check"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken,
+            expectedExits: [new CommandRunner.ExpectedExit(100, "Updates available")])
             .ConfigureAwait(false);
+        if (!run.Ok && run.ExitCode != 100)
+            return updates;
         // "<toolchain> - up to date: …" / "<toolchain> - Update available: 1.90.0 (x) -> 1.91.0 (y)"
         foreach (var rawLine in run.Output.Split('\n'))
         {
@@ -886,6 +902,8 @@ public sealed partial class PackageManager
         var run = await RunNetworkAsync(
             "flatpak", ["remote-ls", "--updates", "--app", "--columns=application,version"],
             _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+            return updates;
         foreach (var rawLine in run.Output.Split('\n'))
         {
             var columns = rawLine.TrimEnd('\r').Split('\t');
@@ -903,6 +921,8 @@ public sealed partial class PackageManager
         var run = await RunNetworkAsync(
             "cargo", ["install-update", "--list"], _downloadTimeoutMilliseconds,
             ProxyEnvironment(Backend.Cargo), cancellationToken).ConfigureAwait(false);
+        if (!run.Ok)
+            return updates;
         // Rows: "name vInstalled vLatest Yes|No" — only Yes needs an update.
         foreach (var line in run.Output.Split('\n'))
         {
@@ -971,19 +991,22 @@ public sealed partial class PackageManager
         int timeoutMilliseconds,
         IReadOnlyDictionary<string, string?>? environment,
         CancellationToken cancellationToken,
-        bool operation = false)
+        bool operation = false,
+        IReadOnlyCollection<CommandRunner.ExpectedExit>? expectedExits = null)
     {
         var argumentList = arguments as IReadOnlyList<string> ?? arguments.ToList();
         var maxRetries = Math.Clamp(_networkRetries, 0, 10);
-        var run = new CommandRunner.Result(false, string.Empty);
+        var run = new CommandRunner.Result(false, string.Empty, -1);
 
         for (var attempt = 0; attempt <= maxRetries; ++attempt)
         {
             run = await CommandRunner.RunAsync(
                 executable, argumentList, timeoutMilliseconds, environment, cancellationToken,
-                operation: operation).ConfigureAwait(false);
+                operation: operation, expectedExits: expectedExits).ConfigureAwait(false);
 
-            if (run.Ok || attempt == maxRetries || cancellationToken.IsCancellationRequested)
+            var expected = expectedExits?.Any(exit => exit.ExitCode == run.ExitCode
+                && (!exit.RequireEmptyOutput || run.Output.Length == 0)) == true;
+            if (run.Ok || expected || attempt == maxRetries || cancellationToken.IsCancellationRequested)
                 return run;
             if (!LooksLikeNetworkFailure(run.Output))
                 return run;

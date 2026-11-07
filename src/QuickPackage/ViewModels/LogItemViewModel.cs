@@ -30,6 +30,7 @@ public sealed partial class LogItemViewModel : ObservableObject
     private readonly StringBuilder _output = new();
     private int _exitCode;
     private CommandEndReason _endReason = CommandEndReason.Completed;
+    private string? _expectedNoteKey;
     private bool _truncated;
     private bool _showDetails = true;
 
@@ -88,7 +89,8 @@ public sealed partial class LogItemViewModel : ObservableObject
     private bool HasFailedExit => IsCommand && State switch
     {
         LogItemState.Failure => true,
-        LogItemState.QueryDone => _endReason != CommandEndReason.Completed || _exitCode != 0,
+        LogItemState.QueryDone => _expectedNoteKey is null
+            && (_endReason != CommandEndReason.Completed || _exitCode != 0),
         _ => false,
     };
 
@@ -108,7 +110,9 @@ public sealed partial class LogItemViewModel : ObservableObject
             return State switch
             {
                 LogItemState.Failure => "\u2717 " + Loc.T("exit %1", _exitCode),
-                LogItemState.QueryDone => (HasFailedExit ? "\u2717 " : "\u00B7 ") + Loc.T("exit %1", _exitCode),
+                LogItemState.QueryDone => _expectedNoteKey is not null
+                    ? "\u00B7 " + Loc.T(_expectedNoteKey)
+                    : (HasFailedExit ? "\u2717 " : "\u00B7 ") + Loc.T("exit %1", _exitCode),
                 _ => string.Empty,
             };
         }
@@ -151,10 +155,12 @@ public sealed partial class LogItemViewModel : ObservableObject
         }
     }
 
-    public void Finish(bool ok, int exitCode, CommandEndReason reason)
+    public void Finish(
+        bool ok, int exitCode, CommandEndReason reason, string? expectedNoteKey = null)
     {
         _exitCode = exitCode;
         _endReason = reason;
+        _expectedNoteKey = expectedNoteKey;
         State = Operation
             ? (ok ? LogItemState.Success : LogItemState.Failure)
             : LogItemState.QueryDone;

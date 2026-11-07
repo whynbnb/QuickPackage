@@ -15,7 +15,8 @@ public enum CommandEndReason
 
 /// <summary>An external command that has finished.</summary>
 public sealed record CommandFinished(
-    long Id, string CommandLine, bool Operation, bool Ok, int ExitCode, CommandEndReason Reason);
+    long Id, string CommandLine, bool Operation, bool Ok, int ExitCode,
+    CommandEndReason Reason, string? ExpectedNoteKey = null);
 
 /// <summary>
 /// Broadcasts external command lifecycle events so the activity panel can show
