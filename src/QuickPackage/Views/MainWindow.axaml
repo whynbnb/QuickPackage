@@ -30,6 +30,7 @@
         <Separator/>
         <MenuItem Header="{Binding L.Snapshots}" Command="{Binding SnapshotsCommand}"/>
         <MenuItem Header="{Binding L.CacheCleanup}" Command="{Binding CacheCleanupCommand}"/>
+        <MenuItem Header="{Binding L.History}" Command="{Binding HistoryCommand}"/>
         <Separator/>
         <MenuItem Header="{Binding UpdatesChipText}" ToggleType="CheckBox"
                   IsChecked="{Binding ShowUpdatesOnly, Mode=TwoWay}"

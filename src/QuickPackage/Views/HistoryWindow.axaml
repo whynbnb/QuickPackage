@@ -1,0 +1,62 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.HistoryWindow"
+        x:DataType="vm:HistoryViewModel"
+        Width="860" Height="640"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="2">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,180,Auto" ColumnSpacing="8">
+      <TextBox Text="{Binding SearchText, Mode=TwoWay}"
+               PlaceholderText="{Binding SearchPlaceholder}"/>
+      <ComboBox Grid.Column="1" ItemsSource="{Binding ActionFilters}"
+                SelectedItem="{Binding SelectedActionFilter, Mode=TwoWay}"/>
+      <TextBlock Grid.Column="2" Text="{Binding CountText}" Classes="subtle"
+                 FontSize="12" VerticalAlignment="Center"/>
+    </Grid>
+
+    <Border Grid.Row="2" Classes="pane" ClipToBounds="True">
+      <Grid Margin="10" RowDefinitions="Auto,*" RowSpacing="6">
+        <Grid ColumnDefinitions="170,100,*,220" ColumnSpacing="8">
+          <TextBlock Text="{Binding TimeHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="1" Text="{Binding ActionHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="2" Text="{Binding PackageHeader}" Classes="subtle" FontSize="11"/>
+          <TextBlock Grid.Column="3" Text="{Binding VersionHeader}" Classes="subtle" FontSize="11"/>
+        </Grid>
+        <ListBox Grid.Row="1" ItemsSource="{Binding Entries}" BorderThickness="0"
+                 Background="Transparent"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                 IsVisible="{Binding HasEntries}">
+          <ListBox.ItemTemplate>
+            <DataTemplate x:DataType="vm:HistoryEntryViewModel">
+              <Grid ColumnDefinitions="170,100,*,220" ColumnSpacing="8" Margin="0,2">
+                <TextBlock Text="{Binding TimeText}" Classes="mono" FontSize="11"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="1" Text="{Binding ActionText}"
+                           Foreground="{Binding ActionForeground}" FontSize="12"
+                           VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="2" Text="{Binding Name}" FontSize="12"
+                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                <TextBlock Grid.Column="3" Text="{Binding VersionText}" Classes="subtle"
+                           FontSize="11" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+        <TextBlock Grid.Row="1" Text="{Binding EmptyText}" Classes="subtle"
+                   IsVisible="{Binding !HasEntries}" FontSize="12"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+      </Grid>
+    </Border>
+
+    <Button Grid.Row="3" Content="{Binding CloseText}" MinWidth="88"
+            HorizontalAlignment="Right" IsDefault="True" Click="OnClose"/>
+  </Grid>
+</Window>
