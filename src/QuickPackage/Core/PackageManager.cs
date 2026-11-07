@@ -1074,6 +1074,281 @@ public sealed partial class PackageManager
 
     // ------------------------------------------------------------- operations
 
+    public sealed record PreviewItem(
+        string Action,
+        string Name,
+        string OldVersion,
+        string NewVersion,
+        string Origin,
+        long DownloadBytes,
+        long InstalledBytes);
+
+    public sealed record TransactionPreview(
+        bool Ok,
+        string Error,
+        IReadOnlyList<string> Commands,
+        IReadOnlyList<PreviewItem> Items,
+        string Notes);
+
+    /// <summary>
+    /// Plans an install/remove/update without executing it. Pacman and AUR
+    /// transactions are resolved with --print so dependencies and sizes are
+    /// visible before the user confirms.
+    /// </summary>
+    public async Task<TransactionPreview> PreviewTransactionAsync(
+        PackageOperation operation,
+        IReadOnlyList<Package> packages,
+        CancellationToken cancellationToken)
+    {
+        var items = new List<PreviewItem>();
+        var commands = new List<string>();
+        var notes = string.Empty;
+        var error = string.Empty;
+
+        if (operation == PackageOperation.Update)
+        {
+            var pacman = packages.Where(p => p.Backend == Backend.Pacman).ToList();
+            var aur = packages.Where(p => p.Backend == Backend.Aur).ToList();
+            if (pacman.Count > 0)
+            {
+                commands.Add(CommandRunner.FormatCommand(
+                    "sudo", ["pacman", "-Syu", "--noconfirm"]));
+                foreach (var package in pacman)
+                    items.Add(new PreviewItem(
+                        Loc.T("Upgrade"), package.Name, package.Version,
+                        package.NewVersion, package.Origin, 0, 0));
+                notes = Loc.T("pacman upgrades the whole system (-Syu), not only the selected packages.");
+            }
+            if (aur.Count > 0)
+            {
+                var helper = AurHelper();
+                if (helper is null)
+                {
+                    error = Loc.T("No AUR helper (paru or yay) found");
+                }
+                else
+                {
+                    commands.Add(CommandRunner.FormatCommand(
+                        helper, ["-Sua", "--noconfirm"]));
+                    foreach (var package in aur)
+                        items.Add(new PreviewItem(
+                            Loc.T("Upgrade"), package.Name, package.Version,
+                            package.NewVersion, package.Origin, 0, 0));
+                }
+            }
+            foreach (var package in packages.Where(p =>
+                         p.Backend is not (Backend.Pacman or Backend.Aur or Backend.Mise or Backend.Rustup)))
+            {
+                var arguments = BuildArguments(operation, package, package.EffectiveId, new OperationState());
+                if (arguments is not null)
+                    commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
+                items.Add(new PreviewItem(
+                    Loc.T("Upgrade"), package.Name, package.Version,
+                    package.NewVersion, package.Origin, 0, 0));
+            }
+            if (packages.Any(p => p.Backend == Backend.Mise))
+                commands.Add(CommandRunner.FormatCommand("mise", ["upgrade"]));
+            if (packages.Any(p => p.Backend == Backend.Rustup))
+                commands.Add(CommandRunner.FormatCommand("rustup", ["update"]));
+
+            return new TransactionPreview(error.Length == 0, error, commands, items, notes);
+        }
+
+        var pacmanAndAur = packages
+            .Where(p => p.Backend is Backend.Pacman or Backend.Aur)
+            .ToList();
+
+        if (operation == PackageOperation.Remove && pacmanAndAur.Count > 0)
+        {
+            var ids = pacmanAndAur.Select(p => p.EffectiveId).Distinct().ToList();
+            var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
+            var print = await CommandRunner.RunAsync(
+                "pacman",
+                ["-Rs", "--print", "--print-format", "%n|%v", .. ids],
+                _queryTimeoutMilliseconds, environment, cancellationToken)
+                .ConfigureAwait(false);
+            if (!print.Ok)
+            {
+                error = print.Output.Trim();
+            }
+            else
+            {
+                foreach (var line in print.Output.Split('\n'))
+                {
+                    var columns = line.TrimEnd('\r').Split('|');
+                    if (columns.Length < 2 || columns[0].Length == 0)
+                        continue;
+                    items.Add(new PreviewItem(
+                        Loc.T("Remove"), columns[0], columns[1], string.Empty,
+                        string.Empty, 0, 0));
+                }
+
+                var sizes = await QueryInstalledSizesAsync(
+                    items.Select(item => item.Name).ToList(), cancellationToken).ConfigureAwait(false);
+                items = items
+                    .Select(item => item with { InstalledBytes = sizes.GetValueOrDefault(item.Name) })
+                    .ToList();
+                foreach (var package in pacmanAndAur)
+                {
+                    var arguments = BuildArguments(operation, package, package.EffectiveId, new OperationState());
+                    if (arguments is not null)
+                        commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
+                }
+                notes = Loc.T("The real removal uses -Rns, so unneeded dependencies and backup files are removed too.");
+            }
+        }
+        else if (operation == PackageOperation.Install)
+        {
+            var pacman = packages.Where(p => p.Backend == Backend.Pacman).ToList();
+            if (pacman.Count > 0)
+            {
+                var (previewItems, printError, command) = await PreviewPrintAsync(
+                    "pacman",
+                    ["-S", "--print", "--print-format", "%n|%v|%s|%r"],
+                    pacman.Select(p => p.EffectiveId).Distinct().ToList(),
+                    EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C")),
+                    cancellationToken).ConfigureAwait(false);
+                if (printError.Length > 0)
+                    error = printError;
+                else
+                    items.AddRange(previewItems);
+                if (command.Length > 0)
+                    commands.Add(command);
+                var sizes = await QuerySyncSizesAsync(
+                    previewItems.Select(item => item.Name).ToList(), cancellationToken).ConfigureAwait(false);
+                items = items
+                    .Select(item => item with { InstalledBytes = sizes.GetValueOrDefault(item.Name) })
+                    .ToList();
+            }
+
+            var aur = packages.Where(p => p.Backend == Backend.Aur).ToList();
+            if (aur.Count > 0)
+            {
+                var helper = AurHelper();
+                if (helper is null)
+                {
+                    error = Loc.T("No AUR helper (paru or yay) found");
+                }
+                else
+                {
+                    var (previewItems, printError, command) = await PreviewPrintAsync(
+                        helper,
+                        ["-S", "--print", "--print-format", "%n|%v|%s|%r"],
+                        aur.Select(p => p.EffectiveId).Distinct().ToList(),
+                        ProxyEnvironment(Backend.Aur),
+                        cancellationToken).ConfigureAwait(false);
+                    if (printError.Length > 0)
+                    {
+                        // AUR --print may fail before the PKGBUILD is inspected;
+                        // fall back to the names the user selected.
+                        previewItems = aur
+                            .Select(p => new PreviewItem(
+                                Loc.T("Install"), p.Name, p.Version, p.NewVersion,
+                                p.Origin.Length > 0 ? p.Origin : "AUR", 0, 0))
+                            .ToList();
+                    }
+                    items.AddRange(previewItems);
+                    if (command.Length > 0)
+                        commands.Add(command);
+                    notes = Loc.T("AUR packages are built locally, so their download size is not known in advance.");
+                }
+            }
+
+            foreach (var package in packages.Where(p =>
+                         p.Backend is not (Backend.Pacman or Backend.Aur)))
+            {
+                var arguments = BuildArguments(PackageOperation.Install, package, package.EffectiveId, new OperationState());
+                if (arguments is not null)
+                    commands.Add(CommandRunner.FormatCommand(arguments[0], arguments.Skip(1).ToList()));
+                items.Add(new PreviewItem(
+                    Loc.T("Install"), package.Name, package.Version, package.NewVersion,
+                    package.Origin, 0, 0));
+            }
+        }
+
+        return new TransactionPreview(error.Length == 0, error, commands, items, notes);
+    }
+
+    private async Task<(List<PreviewItem> Items, string Error, string Command)> PreviewPrintAsync(
+        string executable,
+        IReadOnlyList<string> printArguments,
+        IReadOnlyList<string> ids,
+        IReadOnlyDictionary<string, string?>? environment,
+        CancellationToken cancellationToken)
+    {
+        var arguments = new List<string>(printArguments);
+        arguments.AddRange(ids);
+        var run = executable == "pacman"
+            ? await CommandRunner.RunAsync(
+                executable, arguments, _queryTimeoutMilliseconds, environment, cancellationToken)
+                .ConfigureAwait(false)
+            : await RunNetworkAsync(
+                executable, arguments, _downloadTimeoutMilliseconds, environment, cancellationToken)
+                .ConfigureAwait(false);
+        if (!run.Ok)
+            return ([], run.Output.Trim(), string.Empty);
+
+        var items = new List<PreviewItem>();
+        foreach (var line in run.Output.Split('\n'))
+        {
+            var columns = line.TrimEnd('\r').Split('|');
+            if (columns.Length < 2 || columns[0].Length == 0)
+                continue;
+            var download = columns.Length > 2 && long.TryParse(columns[2], out var bytes) ? bytes : 0;
+            items.Add(new PreviewItem(
+                Loc.T("Install"), columns[0], string.Empty, columns[1],
+                columns.Length > 3 ? columns[3] : string.Empty, download, 0));
+        }
+        return (items, string.Empty, CommandRunner.FormatCommand(executable, arguments));
+    }
+
+    private async Task<Dictionary<string, long>> QueryInstalledSizesAsync(
+        IReadOnlyList<string> names, CancellationToken cancellationToken)
+        => await QuerySizesAsync("-Qi", names, installed: true, cancellationToken).ConfigureAwait(false);
+
+    private async Task<Dictionary<string, long>> QuerySyncSizesAsync(
+        IReadOnlyList<string> names, CancellationToken cancellationToken)
+        => await QuerySizesAsync("-Si", names, installed: false, cancellationToken).ConfigureAwait(false);
+
+    private async Task<Dictionary<string, long>> QuerySizesAsync(
+        string query, IReadOnlyList<string> names, bool installed,
+        CancellationToken cancellationToken)
+    {
+        var sizes = new Dictionary<string, long>(StringComparer.Ordinal);
+        if (names.Count == 0)
+            return sizes;
+        var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
+        var run = await CommandRunner.RunAsync(
+            "pacman", [query, .. names], _queryTimeoutMilliseconds, environment, cancellationToken)
+            .ConfigureAwait(false);
+        foreach (var package in ParsePackageInfo(run.Output, installed))
+            sizes[package.Name] = ParseSizeBytes(package.Size);
+        return sizes;
+    }
+
+    private static long ParseSizeBytes(string value)
+    {
+        var text = value.Trim();
+        if (text.Length == 0)
+            return 0;
+        var space = text.IndexOf(' ');
+        if (space <= 0 || !double.TryParse(
+                text[..space], System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var number))
+            return 0;
+        var unit = text[(space + 1)..].Trim().ToLowerInvariant();
+        var factor = unit switch
+        {
+            "b" => 1L,
+            "kib" => 1024L,
+            "mib" => 1024L * 1024,
+            "gib" => 1024L * 1024 * 1024,
+            "tib" => 1024L * 1024 * 1024 * 1024,
+            _ => 0L,
+        };
+        return factor == 0 ? 0 : (long)(number * factor);
+    }
+
     /// <summary>
     /// Makes sure sudo can run without a terminal. Cached credentials are
     /// reused; otherwise the UI is asked for the password and

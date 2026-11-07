@@ -181,6 +181,13 @@ public partial class MainWindow : Window, IDialogService
         return await dialog.ShowDialog<bool>(this);
     }
 
+    public async Task<bool> ConfirmDetailsAsync(
+        string title, string message, string details, string okText, string cancelText)
+    {
+        var dialog = new MessageWindow(title, message, details, okText, cancelText);
+        return await dialog.ShowDialog<bool>(this);
+    }
+
     public async Task ShowInfoAsync(string title, string message)
     {
         var dialog = new MessageWindow(title, message, Loc.T("OK"), null);

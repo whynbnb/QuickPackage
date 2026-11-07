@@ -5,6 +5,9 @@ public interface IDialogService
 {
     Task<bool> ConfirmAsync(string title, string message, string okText, string cancelText);
 
+    Task<bool> ConfirmDetailsAsync(
+        string title, string message, string details, string okText, string cancelText);
+
     Task ShowInfoAsync(string title, string message);
 
     Task<bool> ShowSettingsAsync(SettingsViewModel viewModel);

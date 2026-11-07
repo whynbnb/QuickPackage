@@ -1172,6 +1172,99 @@ public partial class MainWindowViewModel : ObservableObject
             SelectChip(chip);
     }
 
+    /// <summary>
+    /// Shows the resolved transaction first, then asks for confirmation. If
+    /// pacman cannot plan the transaction, the error is shown but the user may
+    /// still continue because some backends cannot be previewed.
+    /// </summary>
+    private async Task<bool> ConfirmOperationAsync(
+        PackageOperation operation,
+        IReadOnlyList<Package> packages,
+        string title,
+        string question)
+    {
+        var preview = await _manager.PreviewTransactionAsync(
+            operation, packages, CancellationToken.None);
+        var details = FormatPreview(preview);
+
+        var summary = operation switch
+        {
+            PackageOperation.Install => Loc.T(
+                "Install %1 packages · download %2 · installed %3",
+                preview.Items.Count,
+                FormatBytes(preview.Items.Sum(item => item.DownloadBytes)),
+                FormatBytes(preview.Items.Sum(item => item.InstalledBytes))),
+            PackageOperation.Remove => Loc.T(
+                "Remove %1 packages · freed %2",
+                preview.Items.Count,
+                FormatBytes(preview.Items.Sum(item => item.InstalledBytes))),
+            _ => Loc.T("Upgrade %1 packages", preview.Items.Count),
+        };
+        if (!preview.Ok)
+            summary = Loc.T("The transaction preview could not be completed; the exact changes are unknown.");
+
+        return await _dialogs.ConfirmDetailsAsync(
+            title, question + "\n\n" + summary, details,
+            Loc.T("OK"), Loc.T("Cancel"));
+    }
+
+    private static string FormatPreview(PackageManager.TransactionPreview preview)
+    {
+        var lines = new List<string>();
+        if (preview.Commands.Count > 0)
+        {
+            lines.Add(Loc.T("Commands:"));
+            foreach (var command in preview.Commands)
+                lines.Add("  " + command);
+        }
+        if (preview.Items.Count > 0)
+        {
+            if (lines.Count > 0)
+                lines.Add(string.Empty);
+            lines.Add(Loc.T("Packages:"));
+            foreach (var item in preview.Items)
+            {
+                var version = item.NewVersion.Length == 0
+                    ? item.OldVersion
+                    : item.OldVersion.Length == 0
+                        ? item.NewVersion
+                        : item.OldVersion + " -> " + item.NewVersion;
+                var sizes = new List<string>();
+                if (item.DownloadBytes > 0)
+                    sizes.Add("↓ " + FormatBytes(item.DownloadBytes));
+                if (item.InstalledBytes > 0)
+                    sizes.Add("± " + FormatBytes(item.InstalledBytes));
+                lines.Add($"  {item.Action,-7} {item.Name,-32} {version,-24} " +
+                          string.Join("  ", sizes));
+            }
+        }
+        if (preview.Notes.Length > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Loc.T("Note:") + " " + preview.Notes);
+        }
+        if (preview.Error.Length > 0)
+        {
+            lines.Add(string.Empty);
+            lines.Add(Loc.T("Preview error:"));
+            lines.Add(preview.Error);
+        }
+        return string.Join(Environment.NewLine, lines);
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KiB", "MiB", "GiB", "TiB"];
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1)
+        {
+            value /= 1024;
+            ++unit;
+        }
+        return unit == 0 ? $"{bytes} B" : $"{value:0.#} {units[unit]}";
+    }
+
     private async Task RunOperationAsync(PackageOperation operation, IReadOnlyList<Package> packages)
     {
         if (packages.Count == 0 || IsBusy)
@@ -1248,11 +1341,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (packages.Count == 0)
             return;
         var names = string.Join(", ", packages.Select(package => package.Name));
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Update Packages"),
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Update, packages, Loc.T("Update Packages"),
             Loc.Tn("Update the following package?", "Update the following %1 packages?",
-                packages.Count, packages.Count) + "\n\n" + names,
-            Loc.T("OK"), Loc.T("Cancel"));
+                packages.Count, packages.Count) + "\n\n" + names);
         if (!confirmed)
             return;
         await RunOperationAsync(PackageOperation.Update, packages);
@@ -1268,11 +1360,10 @@ public partial class MainWindowViewModel : ObservableObject
         if (packages.Count == 0)
             return;
         var names = string.Join(", ", packages.Select(package => package.Name));
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Remove Packages"),
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Remove, packages, Loc.T("Remove Packages"),
             Loc.Tn("Remove the following orphan package?", "Remove the following %1 orphan packages?",
-                packages.Count, packages.Count) + "\n\n" + names,
-            Loc.T("OK"), Loc.T("Cancel"));
+                packages.Count, packages.Count) + "\n\n" + names);
         if (!confirmed)
             return;
         await RunOperationAsync(PackageOperation.Remove, packages);
@@ -1283,8 +1374,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (item is null)
             return;
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Install Package"), Loc.T("Install %1?", item.Name), Loc.T("OK"), Loc.T("Cancel"));
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Install, [item.Model], Loc.T("Install Package"),
+            Loc.T("Install %1?", item.Name));
         if (confirmed)
             await RunOperationAsync(PackageOperation.Install, [item.Model]);
     }
@@ -1294,8 +1386,9 @@ public partial class MainWindowViewModel : ObservableObject
     {
         if (item is null)
             return;
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Uninstall Package"), Loc.T("Uninstall %1?", item.Name), Loc.T("OK"), Loc.T("Cancel"));
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Remove, [item.Model], Loc.T("Uninstall Package"),
+            Loc.T("Uninstall %1?", item.Name));
         if (confirmed)
             await RunOperationAsync(PackageOperation.Remove, [item.Model]);
     }
@@ -1310,8 +1403,8 @@ public partial class MainWindowViewModel : ObservableObject
             : string.Empty;
         var message = Loc.T("Update %1?", item.Name)
             + (note.Length == 0 ? string.Empty : "\n\n" + note);
-        var confirmed = await _dialogs.ConfirmAsync(
-            Loc.T("Update Package"), message, Loc.T("OK"), Loc.T("Cancel"));
+        var confirmed = await ConfirmOperationAsync(
+            PackageOperation.Update, [item.Model], Loc.T("Update Package"), message);
         if (confirmed)
             await RunOperationAsync(PackageOperation.Update, [item.Model]);
     }
