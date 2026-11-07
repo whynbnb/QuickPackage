@@ -23,8 +23,12 @@ public sealed partial class PackageManager
     private IReadOnlyDictionary<Backend, IReadOnlyDictionary<string, string?>> _proxyEnvironments =
         new Dictionary<Backend, IReadOnlyDictionary<string, string?>>();
 
-    // Read-only queries must not hang forever on a broken mirror/network.
+    // Local queries must not hang forever on a broken mirror or cache.
     private int _queryTimeoutMilliseconds = 30_000;
+
+    // Network checks, downloads, builds and installs need a much longer
+    // allowance than local queries.
+    private int _downloadTimeoutMilliseconds = 3_600_000;
 
     // Only paru and yay are supported; empty means auto-detect.
     private string _preferredAurHelper = string.Empty;
@@ -42,6 +46,9 @@ public sealed partial class PackageManager
 
     public void SetQueryTimeout(int seconds)
         => _queryTimeoutMilliseconds = Math.Clamp(seconds, 5, 600) * 1000;
+
+    public void SetDownloadTimeout(int seconds)
+        => _downloadTimeoutMilliseconds = Math.Clamp(seconds, 60, 86_400) * 1000;
 
     /// <summary>Status / progress messages for the status bar.</summary>
     public event Action<string>? Message;
@@ -159,7 +166,7 @@ public sealed partial class PackageManager
 
         Report(Loc.T("Cleaning pacman cache…"));
         var run = await CommandRunner.RunAsync(
-            executable, arguments, 3_600_000, null, cancellationToken, operation: true).ConfigureAwait(false);
+            executable, arguments, _downloadTimeoutMilliseconds, null, cancellationToken, operation: true).ConfigureAwait(false);
         Report(run.Ok ? Loc.T("Cache cleaned") : Loc.T("Failed: %1", "pacman cache"));
         return run;
     }
@@ -183,7 +190,7 @@ public sealed partial class PackageManager
         var arguments = new List<string> { all ? "-Scc" : "-Sc", "--noconfirm" };
         AddSudoOverride(arguments, askpass?.SudoPath);
         var run = await CommandRunner.RunAsync(
-            helper, arguments, 3_600_000,
+            helper, arguments, _downloadTimeoutMilliseconds,
             ProxyEnvironment(Backend.Aur), cancellationToken, operation: true).ConfigureAwait(false);
         Report(run.Ok ? Loc.T("Cache cleaned") : Loc.T("Failed: %1", "AUR cache"));
         return run;
@@ -793,7 +800,7 @@ public sealed partial class PackageManager
 
     private async Task<Dictionary<string, string>> QueryPacmanUpdatesAsync(CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync("checkupdates", [], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
+        var run = await CommandRunner.RunAsync("checkupdates", [], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Pacman), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -813,7 +820,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> AurUpdateNamesAsync(
         string helper, CancellationToken cancellationToken)
     {
-        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
+        var run = await CommandRunner.RunAsync(helper, ["-Qua"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Aur), cancellationToken)
             .ConfigureAwait(false);
         return ParseUpdateLines(run.Output);
     }
@@ -821,7 +828,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> MiseUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("mise", ["outdated"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
+        var run = await CommandRunner.RunAsync("mise", ["outdated"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Mise), cancellationToken)
             .ConfigureAwait(false);
         // Rows: "tool requested current latest path" — latest is the 4th token.
         foreach (var rawLine in run.Output.Split('\n'))
@@ -837,7 +844,7 @@ public sealed partial class PackageManager
     private async Task<Dictionary<string, string>> RustupUpdateNamesAsync(CancellationToken cancellationToken)
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
-        var run = await CommandRunner.RunAsync("rustup", ["check"], _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
+        var run = await CommandRunner.RunAsync("rustup", ["check"], _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Rustup), cancellationToken)
             .ConfigureAwait(false);
         // "<toolchain> - up to date: …" / "<toolchain> - Update available: 1.90.0 (x) -> 1.91.0 (y)"
         foreach (var rawLine in run.Output.Split('\n'))
@@ -870,7 +877,7 @@ public sealed partial class PackageManager
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
         var run = await CommandRunner.RunAsync(
             "flatpak", ["remote-ls", "--updates", "--app", "--columns=application,version"],
-            _queryTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
+            _downloadTimeoutMilliseconds, ProxyEnvironment(Backend.Flatpak), cancellationToken).ConfigureAwait(false);
         foreach (var rawLine in run.Output.Split('\n'))
         {
             var columns = rawLine.TrimEnd('\r').Split('\t');
@@ -886,7 +893,7 @@ public sealed partial class PackageManager
     {
         var updates = new Dictionary<string, string>(StringComparer.Ordinal);
         var run = await CommandRunner.RunAsync(
-            "cargo", ["install-update", "--list"], _queryTimeoutMilliseconds,
+            "cargo", ["install-update", "--list"], _downloadTimeoutMilliseconds,
             ProxyEnvironment(Backend.Cargo), cancellationToken).ConfigureAwait(false);
         // Rows: "name vInstalled vLatest Yes|No" — only Yes needs an update.
         foreach (var line in run.Output.Split('\n'))
@@ -997,7 +1004,7 @@ public sealed partial class PackageManager
                 {
                     Report(Loc.T("Upgrading system (pacman -Syu)…"));
                     var run = await CommandRunner.RunAsync(
-                        "sudo", ["pacman", "-Syu", "--noconfirm"], 3_600_000,
+                        "sudo", ["pacman", "-Syu", "--noconfirm"], _downloadTimeoutMilliseconds,
                         ProxyEnvironment(Backend.Pacman), cancellationToken, operation: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
@@ -1025,7 +1032,7 @@ public sealed partial class PackageManager
                     if (helper == "paru")
                         arguments.Add("--skipreview");
                     AddSudoOverride(arguments, sudoPath);
-                    var run = await CommandRunner.RunAsync(helper, arguments, 3_600_000,
+                    var run = await CommandRunner.RunAsync(helper, arguments, _downloadTimeoutMilliseconds,
                         ProxyEnvironment(Backend.Aur), cancellationToken, operation: true)
                         .ConfigureAwait(false);
                     if (!run.Ok)
@@ -1041,7 +1048,7 @@ public sealed partial class PackageManager
             {
                 Report(Loc.T("Upgrading mise tools (mise upgrade)…"));
                 var run = await CommandRunner.RunAsync(
-                    "mise", ["upgrade"], 3_600_000,
+                    "mise", ["upgrade"], _downloadTimeoutMilliseconds,
                     ProxyEnvironment(Backend.Mise), cancellationToken, operation: true).ConfigureAwait(false);
                 if (!run.Ok)
                 {
@@ -1055,7 +1062,7 @@ public sealed partial class PackageManager
             {
                 Report(Loc.T("Upgrading rustup toolchains (rustup update)…"));
                 var run = await CommandRunner.RunAsync(
-                    "rustup", ["update"], 3_600_000,
+                    "rustup", ["update"], _downloadTimeoutMilliseconds,
                     ProxyEnvironment(Backend.Rustup), cancellationToken, operation: true).ConfigureAwait(false);
                 if (!run.Ok)
                 {
@@ -1091,7 +1098,7 @@ public sealed partial class PackageManager
                 PackageOperation.Install => Loc.T("Installing %1…", package.Name),
                 _ => Loc.T("Updating %1…", package.Name),
             });
-            var run = await CommandRunner.RunAsync(arguments[0], arguments.Skip(1), 1_800_000,
+            var run = await CommandRunner.RunAsync(arguments[0], arguments.Skip(1), _downloadTimeoutMilliseconds,
                 ProxyEnvironment(package.Backend), cancellationToken, operation: true).ConfigureAwait(false);
             if (!run.Ok)
             {

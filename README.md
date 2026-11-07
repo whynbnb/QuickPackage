@@ -30,7 +30,8 @@ C# 14 and Avalonia.
 - Native **Wayland** windowing when the compositor is available, with an
   automatic X11/XWayland fallback otherwise
 - Stop a running refresh/update/operation with the footer button or `Esc`,
-  and a configurable timeout for read-only queries
+  with separate timeouts for local queries and for update
+  checks/downloads/builds
 - Asks for the sudo password inside the app when no cached credentials are
   available, including for the sudo calls that paru/yay make while building
   and installing; a rejected password keeps the prompt open for a retry
@@ -81,9 +82,11 @@ Install the desktop entry from `data/` next to the binary (or into
 Settings live in `$XDG_CONFIG_HOME/quickpackagerc` (default
 `~/.config/quickpackagerc`):
 
-- `[General]` — language, theme, startup update check, query timeout, the
-  AUR helper (`paru`/`yay`), the activity log's expanded state, height and
-  detail visibility, and one `Enable*` key per backend
+- `[General]` — language, theme, startup update check, the local query
+  timeout (`CommandTimeout`), the update/download timeout
+  (`DownloadTimeout`), the AUR helper (`paru`/`yay`), the activity log's
+  expanded state, height and detail visibility, and one `Enable*` key per
+  backend
 - `[Proxy]` — mode, host, port and one `Enable*` key per backend
 
 Snapshots are stored next to it in

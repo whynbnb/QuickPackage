@@ -1274,5 +1274,6 @@ public partial class MainWindowViewModel : ObservableObject
         _manager.SetBackendEnabled(Backend.Fvm, _fvmEnabled);
         _manager.SetProxy(_proxy);
         _manager.SetQueryTimeout(_config.GetInt("General", "CommandTimeout", 30));
+        _manager.SetDownloadTimeout(_config.GetInt("General", "DownloadTimeout", 3600));
     }
 }

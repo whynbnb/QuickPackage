@@ -70,6 +70,8 @@ public partial class SettingsViewModel : ObservableObject
         SelectedTheme = Themes.FirstOrDefault(option => option.Value == _initialTheme) ?? Themes[0];
         CheckUpdatesOnStart = config.GetBool("General", "CheckUpdatesOnStart", true);
         QueryTimeout = Math.Clamp(config.GetInt("General", "CommandTimeout", 30), 5, 600);
+        DownloadTimeout = Math.Clamp(
+            config.GetInt("General", "DownloadTimeout", 3600), 60, 86_400);
 
         EnablePacman = _initialPacman = config.GetBool("General", "EnablePacman", true);
         EnableAur = _initialAur = config.GetBool("General", "EnableAur", true);
@@ -104,6 +106,10 @@ public partial class SettingsViewModel : ObservableObject
     public string ThemeLabel => Loc.T("Theme:");
     public string StartupCheckText => Loc.T("Check for updates on startup");
     public string QueryTimeoutLabel => Loc.T("Query timeout (s):");
+    public string QueryTimeoutHint => Loc.T("Local package listings and metadata queries.");
+    public string DownloadTimeoutLabel => Loc.T("Download/update timeout (s):");
+    public string DownloadTimeoutHint => Loc.T("Update checks, downloads, builds, installs and removals.");
+    public string TimeoutsGroup => Loc.T("Timeouts");
     public string BackendsGroup => Loc.T("Package backends");
     public string EnablePacmanText => Loc.T("Enable pacman");
     public string EnableAurText => Loc.T("Enable AUR");
@@ -145,6 +151,9 @@ public partial class SettingsViewModel : ObservableObject
 
     [ObservableProperty]
     private decimal _queryTimeout = 30;
+
+    [ObservableProperty]
+    private decimal _downloadTimeout = 3600;
 
     [ObservableProperty]
     private bool _enablePacman;
@@ -267,6 +276,7 @@ public partial class SettingsViewModel : ObservableObject
         _config.Set("General", "Theme", SelectedTheme?.Value ?? "system");
         _config.Set("General", "CheckUpdatesOnStart", CheckUpdatesOnStart);
         _config.Set("General", "CommandTimeout", Math.Clamp((int)QueryTimeout, 5, 600));
+        _config.Set("General", "DownloadTimeout", Math.Clamp((int)DownloadTimeout, 60, 86_400));
         _config.Set("General", "EnablePacman", EnablePacman);
         _config.Set("General", "EnableAur", EnableAur);
         _config.Set("General", "EnableFlatpak", EnableFlatpak);

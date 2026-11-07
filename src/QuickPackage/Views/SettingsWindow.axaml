@@ -18,7 +18,7 @@
     <ScrollViewer VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="14">
 
-        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="110,*" RowDefinitions="Auto,Auto" RowSpacing="10">
           <TextBlock Text="{Binding LanguageLabel}" VerticalAlignment="Center"/>
           <ComboBox Grid.Column="1" ItemsSource="{Binding Languages}"
                     SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}"
@@ -27,10 +27,24 @@
           <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}"
                     SelectedItem="{Binding SelectedTheme, Mode=TwoWay}"
                     HorizontalAlignment="Stretch"/>
-          <TextBlock Grid.Row="2" Text="{Binding QueryTimeoutLabel}" VerticalAlignment="Center"/>
-          <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding QueryTimeout, Mode=TwoWay}"
-                         Minimum="5" Maximum="600" Increment="5" FormatString="0"/>
         </Grid>
+
+        <GroupBox Header="{Binding TimeoutsGroup}">
+          <Grid ColumnDefinitions="230,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+            <TextBlock Text="{Binding QueryTimeoutLabel}" VerticalAlignment="Center"/>
+            <NumericUpDown Grid.Column="1" Value="{Binding QueryTimeout, Mode=TwoWay}"
+                           Minimum="5" Maximum="600" Increment="5" FormatString="0"
+                           HorizontalAlignment="Left" Width="160"/>
+            <TextBlock Grid.Row="1" Grid.ColumnSpan="2" Text="{Binding QueryTimeoutHint}"
+                       FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,-2,0,4"/>
+            <TextBlock Grid.Row="2" Text="{Binding DownloadTimeoutLabel}" VerticalAlignment="Center"/>
+            <NumericUpDown Grid.Row="2" Grid.Column="1" Value="{Binding DownloadTimeout, Mode=TwoWay}"
+                           Minimum="60" Maximum="86400" Increment="60" FormatString="0"
+                           HorizontalAlignment="Left" Width="160"/>
+            <TextBlock Grid.Row="3" Grid.ColumnSpan="2" Text="{Binding DownloadTimeoutHint}"
+                       FontSize="11" Opacity="0.7" TextWrapping="Wrap" Margin="0,-2,0,0"/>
+          </Grid>
+        </GroupBox>
 
         <CheckBox Content="{Binding StartupCheckText}" IsChecked="{Binding CheckUpdatesOnStart, Mode=TwoWay}"/>
 
