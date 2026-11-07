@@ -1,4 +1,6 @@
 using System.Globalization;
+using System.Net.Sockets;
+using System.Text;
 using Avalonia;
 using QuickPackage.Core;
 
@@ -9,6 +11,14 @@ internal static class Program
     [STAThread]
     public static void Main(string[] args)
     {
+        // AUR helpers run sudo with -A and call us back through SUDO_ASKPASS
+        // so the password prompt never blocks on the launching terminal.
+        if (args.Length >= 2 && args[0] == "--askpass")
+        {
+            RunAskpass(args[1]);
+            return;
+        }
+
         // The language is resolved before any UI string is produced.
         var config = Config.Load();
         var language = config.GetString("General", "Language", "system");
@@ -21,6 +31,41 @@ internal static class Program
         CultureInfo.DefaultThreadCurrentUICulture = culture;
 
         BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+    }
+
+    /// <summary>Prints the password supplied by the running app for sudo -A.</summary>
+    private static void RunAskpass(string socketPath)
+    {
+        try
+        {
+            using var socket = new Socket(
+                AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            socket.Connect(new UnixDomainSocketEndPoint(socketPath));
+            using var stream = new NetworkStream(socket, ownsSocket: false);
+
+            using var writer = new StreamWriter(
+                stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+                bufferSize: 256, leaveOpen: true)
+            {
+                AutoFlush = true,
+            };
+            writer.WriteLine("password");
+
+            using var reader = new StreamReader(
+                stream, Encoding.UTF8, detectEncodingFromByteOrderMarks: false,
+                bufferSize: 256, leaveOpen: true);
+            var password = reader.ReadLine();
+            if (!string.IsNullOrEmpty(password))
+            {
+                Console.Out.Write(password);
+                Console.Out.Write('\n');
+                Console.Out.Flush();
+            }
+        }
+        catch
+        {
+            Environment.ExitCode = 1;
+        }
     }
 
     public static AppBuilder BuildAvaloniaApp()

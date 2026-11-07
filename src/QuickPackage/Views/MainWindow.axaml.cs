@@ -161,7 +161,8 @@ public partial class MainWindow : Window, IDialogService
         await dialog.ShowDialog(this);
     }
 
-    public async Task<string?> AskPasswordAsync(string title, string message)
+    public async Task<string?> AskPasswordAsync(
+        string title, string message, Func<string, Task<bool>>? validate = null)
     {
         // The prompt may be requested from a modal cache/snapshot window, so
         // parent it to whichever window is currently active.
@@ -169,7 +170,7 @@ public partial class MainWindow : Window, IDialogService
         if (Application.Current?.ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
             owner = desktop.Windows.LastOrDefault(window => window.IsActive) ?? this;
 
-        var dialog = new PasswordWindow(title, message);
+        var dialog = new PasswordWindow(title, message, validate);
         return await dialog.ShowDialog<string?>(owner);
     }
 }

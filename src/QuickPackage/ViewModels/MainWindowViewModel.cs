@@ -1044,13 +1044,14 @@ public partial class MainWindowViewModel : ObservableObject
 
     // ---------------------------------------------------------------- dialogs
 
-    private async Task<string?> AskSudoPasswordAsync()
+    private async Task<string?> AskSudoPasswordAsync(Func<string, Task<bool>>? validate)
     {
         var title = Loc.T("Authentication required");
         var message = Loc.T("Enter your password to run pacman with administrator privileges.");
         if (Dispatcher.UIThread.CheckAccess())
-            return await _dialogs.AskPasswordAsync(title, message);
-        return await Dispatcher.UIThread.InvokeAsync(() => _dialogs.AskPasswordAsync(title, message));
+            return await _dialogs.AskPasswordAsync(title, message, validate);
+        return await Dispatcher.UIThread.InvokeAsync(
+            () => _dialogs.AskPasswordAsync(title, message, validate));
     }
 
     [RelayCommand]
