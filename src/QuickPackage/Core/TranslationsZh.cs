@@ -374,6 +374,8 @@ internal static class TranslationsZh
         ["Copy package name"] = "复制软件包名",
         ["Open AUR page"] = "打开 AUR 页面",
         ["Package name copied to clipboard"] = "软件包名已复制到剪贴板",
+        ["Clear search"] = "清空搜索",
+        ["Search history"] = "搜索历史",
         ["Diagnose backends"] = "后端诊断",
         ["Backend diagnostics"] = "后端诊断",
         ["Required tools and helpers for the enabled package backends."] = "已启用后端所需的工具与助手。",

@@ -40,6 +40,8 @@ public sealed class LocStrings : ObservableObject
     public string SearchOnlineHint => Loc.T("Search an online package catalogue for new packages");
     public string SearchFlatpak => Loc.T("Search Flatpak");
     public string SearchCrates => Loc.T("Search crates.io");
+    public string ClearSearch => Loc.T("Clear search");
+    public string SearchHistory => Loc.T("Search history");
     public string Refresh => Loc.T("Refresh");
     public string Snapshots => Loc.T("Snapshots");
     public string CacheCleanup => Loc.T("Cache cleanup");

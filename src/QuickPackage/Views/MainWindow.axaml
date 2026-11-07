@@ -59,25 +59,36 @@
 
       <Grid Grid.Column="1" ColumnDefinitions="*,Auto" ColumnSpacing="6">
         <TextBox x:Name="SearchBox" Text="{Binding SearchText, Mode=TwoWay}"
+                 KeyDown="OnSearchKeyDown"
                  PlaceholderText="{Binding L.SearchPackages}" VerticalAlignment="Center"/>
-        <Button Grid.Column="1" Classes="toolbar" Content="{Binding L.SearchOnline}"
-                IsVisible="{Binding CanSearchOnline}"
-                IsEnabled="{Binding CanSearchOnline}"
-                ToolTip.Tip="{Binding L.SearchOnlineHint}">
-          <Button.Flyout>
-            <MenuFlyout>
-              <MenuItem Header="{Binding L.SearchAur}"
-                        Command="{Binding SearchAurCommand}"
-                        IsEnabled="{Binding CanSearchAur}"/>
-              <MenuItem Header="{Binding L.SearchFlatpak}"
-                        Command="{Binding SearchFlatpakCommand}"
-                        IsEnabled="{Binding CanSearchFlatpak}"/>
-              <MenuItem Header="{Binding L.SearchCrates}"
-                        Command="{Binding SearchCratesCommand}"
-                        IsEnabled="{Binding CanSearchCrates}"/>
-            </MenuFlyout>
-          </Button.Flyout>
-        </Button>
+        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2">
+          <Button Classes="ghost" Content="✕" Padding="7,2" FontSize="12"
+                  Command="{Binding ClearSearchCommand}"
+                  IsVisible="{Binding HasSearchText}"
+                  ToolTip.Tip="{Binding L.ClearSearch}"/>
+          <Button Classes="ghost" Content="🕘" Padding="7,2" FontSize="12"
+                  Click="OnSearchHistory"
+                  IsVisible="{Binding HasSearchHistory}"
+                  ToolTip.Tip="{Binding L.SearchHistory}"/>
+          <Button Classes="toolbar" Content="{Binding L.SearchOnline}"
+                  IsVisible="{Binding CanSearchOnline}"
+                  IsEnabled="{Binding CanSearchOnline}"
+                  ToolTip.Tip="{Binding L.SearchOnlineHint}">
+            <Button.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="{Binding L.SearchAur}"
+                          Command="{Binding SearchAurCommand}"
+                          IsEnabled="{Binding CanSearchAur}"/>
+                <MenuItem Header="{Binding L.SearchFlatpak}"
+                          Command="{Binding SearchFlatpakCommand}"
+                          IsEnabled="{Binding CanSearchFlatpak}"/>
+                <MenuItem Header="{Binding L.SearchCrates}"
+                          Command="{Binding SearchCratesCommand}"
+                          IsEnabled="{Binding CanSearchCrates}"/>
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </StackPanel>
       </Grid>
 
       <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="6">

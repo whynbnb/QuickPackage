@@ -58,6 +58,7 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _rustupEnabled;
     private bool _fvmEnabled;
     private readonly HashSet<string> _ignoredPackages = new(StringComparer.Ordinal);
+    private readonly ObservableCollection<string> _searchHistory = [];
 
     public MainWindowViewModel(IDialogService dialogs)
     {
@@ -107,6 +108,7 @@ public partial class MainWindowViewModel : ObservableObject
         StatusMessage = Loc.T("Ready");
         BuildChips();
         BuildSortOptions();
+        LoadSearchHistory();
         RefreshModeUi();
         UpdateCounters();
     }
@@ -397,6 +399,42 @@ public partial class MainWindowViewModel : ObservableObject
 
     public ObservableCollection<OptionItem> SortOptions { get; } = [];
 
+    public ObservableCollection<string> SearchHistory => _searchHistory;
+
+    public bool HasSearchHistory => _searchHistory.Count > 0;
+
+    public bool HasSearchText => SearchText.Length > 0;
+
+    private void LoadSearchHistory()
+    {
+        foreach (var entry in _config.GetString("General", "SearchHistory")
+                     .Split('\u001f', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            _searchHistory.Add(entry);
+        }
+        OnPropertyChanged(nameof(HasSearchHistory));
+    }
+
+    /// <summary>Remembers the current query for the search history flyout.</summary>
+    public void RememberSearch()
+    {
+        var text = SearchText.Trim();
+        if (text.Length < 2)
+            return;
+        _searchHistory.Remove(text);
+        _searchHistory.Insert(0, text);
+        while (_searchHistory.Count > 10)
+            _searchHistory.RemoveAt(_searchHistory.Count - 1);
+        _config.Set("General", "SearchHistory", string.Join('\u001f', _searchHistory));
+        _config.Save();
+        OnPropertyChanged(nameof(HasSearchHistory));
+    }
+
+    public void ApplySearch(string query) => SearchText = query;
+
+    [RelayCommand]
+    private void ClearSearch() => SearchText = string.Empty;
+
     private bool _suppressSortChange;
 
     [ObservableProperty]
@@ -557,6 +595,7 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnSearchTextChanged(string value)
     {
+        OnPropertyChanged(nameof(HasSearchText));
         ApplyFilter();
         NotifySearchAvailability();
         ScheduleAurSearch(value);
@@ -1064,7 +1103,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (SearchText.Length > 0)
         {
             bool Matches(string text) => text.Contains(SearchText, StringComparison.OrdinalIgnoreCase);
-            if (!Matches(model.Name) && !Matches(model.PackageId) && !Matches(model.Description))
+            if (!Matches(model.Name) && !Matches(model.PackageId) && !Matches(model.Description)
+                && !Matches(model.Provides) && !Matches(model.Groups))
                 return false;
         }
         return true;

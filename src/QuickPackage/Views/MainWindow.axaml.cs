@@ -27,6 +27,44 @@ public partial class MainWindow : Window, IDialogService
         _viewModel.PropertyChanged += OnViewModelPropertyChanged;
         Opened += OnOpened;
         Closing += OnClosing;
+        AddHandler(KeyDownEvent, OnWindowKeyDown, RoutingStrategies.Tunnel);
+    }
+
+    private void OnWindowKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.F && e.KeyModifiers.HasFlag(KeyModifiers.Control))
+        {
+            SearchBox.Focus();
+            SearchBox.SelectAll();
+            e.Handled = true;
+        }
+    }
+
+    private void OnSearchKeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter)
+            return;
+        _viewModel.RememberSearch();
+        e.Handled = true;
+    }
+
+    private void OnSearchHistory(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button button)
+            return;
+        var flyout = new MenuFlyout();
+        foreach (var query in _viewModel.SearchHistory)
+        {
+            var item = new MenuItem { Header = query };
+            item.Click += (_, _) =>
+            {
+                _viewModel.ApplySearch(query);
+                _viewModel.RememberSearch();
+            };
+            flyout.Items.Add(item);
+        }
+        if (flyout.Items.Count > 0)
+            flyout.ShowAt(button);
     }
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
