@@ -401,6 +401,7 @@ internal static class TranslationsZh
         ["Downgrade package"] = "降级软件包",
         ["Choose a cached version of %1 to install."] = "选择要安装的 %1 缓存版本。",
         ["Downgraded to %1"] = "已降级到 %1",
+        ["Downgrading %1…"] = "正在降级 %1…",
         ["Install local package"] = "安装本地软件包",
         ["Install %1 with pacman -U?"] = "使用 pacman -U 安装 %1?",
         ["Local package installed"] = "本地软件包已安装",
