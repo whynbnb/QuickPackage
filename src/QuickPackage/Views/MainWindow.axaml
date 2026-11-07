@@ -189,43 +189,40 @@
       </Border>
 
       <Border Grid.Column="1" Classes="pane" Margin="10,0,0,0">
-        <ScrollViewer HorizontalScrollBarVisibility="Disabled">
-          <Grid Margin="14">
-            <StackPanel IsVisible="{Binding !IsPackageSelected}"
-                        HorizontalAlignment="Center" VerticalAlignment="Center">
-              <TextBlock Text="{Binding L.SelectPackageHint}" TextWrapping="Wrap"
-                         TextAlignment="Center" Classes="subtle"/>
-            </StackPanel>
+        <Grid>
+          <StackPanel IsVisible="{Binding !IsPackageSelected}"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+            <TextBlock Text="{Binding L.SelectPackageHint}" TextWrapping="Wrap"
+                       TextAlignment="Center" Classes="subtle"/>
+          </StackPanel>
 
-            <StackPanel IsVisible="{Binding IsPackageSelected}" Spacing="10">
-              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
-                <TextBlock Text="{Binding SelectedPackage.Name}" Classes="h1"
-                           TextWrapping="Wrap" VerticalAlignment="Center"/>
-                <Border Grid.Column="1" Classes="pill" Background="{Binding SelectedPackage.TagBackground}"
+          <Grid IsVisible="{Binding IsPackageSelected}" RowDefinitions="Auto,*"
+                Margin="14" RowSpacing="10">
+            <!-- Navigation and actions stay pinned above the scrollable details. -->
+            <StackPanel Grid.Row="0" Spacing="10">
+              <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="6">
+                <Button Classes="toolbar" Command="{Binding GoBackCommand}"
+                        ToolTip.Tip="{Binding L.Back}" Padding="0" Width="30" Height="28"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        VerticalAlignment="Center">
+                  <TextBlock Text="←" FontSize="16" HorizontalAlignment="Center"
+                             VerticalAlignment="Center"/>
+                </Button>
+                <Button Grid.Column="1" Classes="toolbar" Command="{Binding GoForwardCommand}"
+                        ToolTip.Tip="{Binding L.Forward}" Padding="0" Width="30" Height="28"
+                        HorizontalContentAlignment="Center" VerticalContentAlignment="Center"
+                        VerticalAlignment="Center">
+                  <TextBlock Text="→" FontSize="16" HorizontalAlignment="Center"
+                             VerticalAlignment="Center"/>
+                </Button>
+                <TextBlock Grid.Column="2" Text="{Binding SelectedPackage.Name}" Classes="h1"
+                           TextWrapping="Wrap" VerticalAlignment="Center" Margin="4,0,0,0"/>
+                <Border Grid.Column="3" Classes="pill" Background="{Binding SelectedPackage.TagBackground}"
                         VerticalAlignment="Center">
                   <TextBlock Text="{Binding SelectedPackage.TagText}"
                              Foreground="{Binding SelectedPackage.TagForeground}" FontSize="11"/>
                 </Border>
               </Grid>
-
-              <ItemsControl ItemsSource="{Binding DetailFields}">
-                <ItemsControl.ItemTemplate>
-                  <DataTemplate x:DataType="vm:DetailFieldViewModel">
-                    <Grid ColumnDefinitions="96,*" Margin="0,2">
-                      <TextBlock Text="{Binding Label}" Classes="subtle" FontSize="12"
-                                 VerticalAlignment="Top"/>
-                      <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12"
-                                 IsVisible="{Binding !IsLink}"/>
-                      <HyperlinkButton Grid.Column="1" Content="{Binding Value}" FontSize="12"
-                                       Padding="0" Command="{Binding OpenCommand}"
-                                       IsVisible="{Binding IsLink}"/>
-                    </Grid>
-                  </DataTemplate>
-                </ItemsControl.ItemTemplate>
-              </ItemsControl>
-
-              <TextBlock Text="{Binding DetailDescription}" TextWrapping="Wrap" FontSize="12"
-                         IsVisible="{Binding HasDetailDescription}"/>
 
               <StackPanel Orientation="Horizontal" Spacing="6">
                 <Button Classes="detail" Content="{Binding L.Install}"
@@ -250,8 +247,68 @@
                         IsEnabled="{Binding CanUninstallSelectedPackage}"/>
               </StackPanel>
             </StackPanel>
+
+            <ScrollViewer x:Name="DetailScroll" Grid.Row="1"
+                          HorizontalScrollBarVisibility="Disabled">
+              <StackPanel Spacing="10">
+                <ItemsControl ItemsSource="{Binding DetailFields}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:DetailFieldViewModel">
+                      <Grid ColumnDefinitions="96,*" Margin="0,2">
+                        <TextBlock Text="{Binding Label}" Classes="subtle" FontSize="12"
+                                   VerticalAlignment="Top"/>
+                        <TextBlock Grid.Column="1" Text="{Binding Value}" TextWrapping="Wrap" FontSize="12"
+                                   IsVisible="{Binding !IsLink}"/>
+                        <HyperlinkButton Grid.Column="1" Content="{Binding Value}" FontSize="12"
+                                         Padding="0" Command="{Binding OpenCommand}"
+                                         IsVisible="{Binding IsLink}"/>
+                      </Grid>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+
+                <TextBlock Text="{Binding DetailDescription}" TextWrapping="Wrap" FontSize="12"
+                           IsVisible="{Binding HasDetailDescription}"/>
+
+                <StackPanel Spacing="4" IsVisible="{Binding HasForwardDependencies}">
+                  <TextBlock Text="{Binding L.DependsOnDeps}" Classes="subtle" FontSize="12"/>
+                  <ItemsControl ItemsSource="{Binding ForwardDependencies}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel/>
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DependencyViewModel">
+                        <Button Classes="dependency" Content="{Binding Name}"
+                                Command="{Binding NavigateCommand}"
+                                IsEnabled="{Binding IsAvailable}"/>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+
+                <StackPanel Spacing="4" IsVisible="{Binding HasReverseDependencies}">
+                  <TextBlock Text="{Binding L.RequiredByDeps}" Classes="subtle" FontSize="12"/>
+                  <ItemsControl ItemsSource="{Binding ReverseDependencies}">
+                    <ItemsControl.ItemsPanel>
+                      <ItemsPanelTemplate>
+                        <WrapPanel/>
+                      </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate x:DataType="vm:DependencyViewModel">
+                        <Button Classes="dependency" Content="{Binding Name}"
+                                Command="{Binding NavigateCommand}"
+                                IsEnabled="{Binding IsAvailable}"/>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
           </Grid>
-        </ScrollViewer>
+        </Grid>
       </Border>
     </Grid>
 

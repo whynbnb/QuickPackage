@@ -45,6 +45,7 @@ public sealed class Package
     public string Url { get; set; } = string.Empty;
     public string Licenses { get; set; } = string.Empty;
     public string Depends { get; set; } = string.Empty;
+    public string RequiredBy { get; set; } = string.Empty;
     public string Binaries { get; set; } = string.Empty;
     public Backend Backend { get; set; } = Backend.Pacman;
     public PackageStatus Status { get; set; } = PackageStatus.Idle;

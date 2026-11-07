@@ -44,6 +44,11 @@ public partial class MainWindowViewModel : ObservableObject
     private ChipKind _selectedChip = ChipKind.All;
     private CancellationTokenSource? _operationCts;
 
+    // Detail-pane navigation history (dependency links and list selections).
+    private readonly List<PackageItemViewModel> _navigation = [];
+    private int _navigationIndex = -1;
+    private bool _suppressNavigation;
+
     private bool _pacmanEnabled = true;
     private bool _aurEnabled = true;
     private bool _flatpakEnabled = true;
@@ -100,6 +105,10 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<ChipViewModel> Chips { get; } = [];
 
     public ObservableCollection<DetailFieldViewModel> DetailFields { get; } = [];
+
+    public ObservableCollection<DependencyViewModel> ForwardDependencies { get; } = [];
+
+    public ObservableCollection<DependencyViewModel> ReverseDependencies { get; } = [];
 
     public ObservableCollection<LogItemViewModel> LogItems { get; } = [];
 
@@ -198,6 +207,17 @@ public partial class MainWindowViewModel : ObservableObject
 
     public bool CanBulkUpdate => HasSelection && !IsBusy;
 
+    public bool CanGoBack => _navigationIndex > 0;
+
+    public bool CanGoForward =>
+        _navigationIndex >= 0 && _navigationIndex + 1 < _navigation.Count;
+
+    [ObservableProperty]
+    private bool _hasForwardDependencies;
+
+    [ObservableProperty]
+    private bool _hasReverseDependencies;
+
     public bool HasDevBackends => _miseEnabled || _rustupEnabled || _fvmEnabled;
 
     public bool ShowBackendHint =>
@@ -265,7 +285,12 @@ public partial class MainWindowViewModel : ObservableObject
 
     partial void OnHasSelectionChanged(bool value) => OnPropertyChanged(nameof(CanBulkUpdate));
 
-    partial void OnSelectedPackageChanged(PackageItemViewModel? value) => RebuildDetail(value);
+    partial void OnSelectedPackageChanged(PackageItemViewModel? value)
+    {
+        RebuildDetail(value);
+        if (!_suppressNavigation && value is not null)
+            PushNavigation(value);
+    }
 
     private void OnPackagePropertyChanged(object? sender, PropertyChangedEventArgs args)
     {
@@ -650,8 +675,12 @@ public partial class MainWindowViewModel : ObservableObject
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
+            var previousNavigation = _suppressNavigation;
+            _suppressNavigation = true;
             RestoreSelection(selection);
+            _suppressNavigation = previousNavigation;
             RebuildDetail(SelectedPackage);
+            ResetNavigation(SelectedPackage);
             StatusMessage = Loc.T("Loaded %1 packages", packages.Count);
         }
         catch (OperationCanceledException)
@@ -768,6 +797,123 @@ public partial class MainWindowViewModel : ObservableObject
             entries.Remove(package.Name);
             entries.Remove(package.EffectiveId);
         }
+    }
+
+    // ------------------------------------------------------------- navigation
+
+    private PackageItemViewModel? FindPackage(string name)
+    {
+        foreach (var item in _all)
+        {
+            if (string.Equals(item.Model.Name, name, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(item.Model.PackageId, name, StringComparison.OrdinalIgnoreCase))
+                return item;
+        }
+        return null;
+    }
+
+    private void PushNavigation(PackageItemViewModel item)
+    {
+        if (_navigationIndex >= 0 && _navigationIndex < _navigation.Count
+            && _navigation[_navigationIndex] == item)
+        {
+            return;
+        }
+
+        // Selecting a new package after going back discards the forward stack.
+        if (_navigationIndex + 1 < _navigation.Count)
+            _navigation.RemoveRange(
+                _navigationIndex + 1, _navigation.Count - _navigationIndex - 1);
+
+        _navigation.Add(item);
+        _navigationIndex = _navigation.Count - 1;
+        if (_navigation.Count > 50)
+        {
+            _navigation.RemoveAt(0);
+            --_navigationIndex;
+        }
+        NotifyNavigationState();
+    }
+
+    private void ResetNavigation(PackageItemViewModel? current)
+    {
+        _navigation.Clear();
+        _navigationIndex = -1;
+        if (current is not null)
+        {
+            _navigation.Add(current);
+            _navigationIndex = 0;
+        }
+        NotifyNavigationState();
+    }
+
+    private void NotifyNavigationState()
+    {
+        OnPropertyChanged(nameof(CanGoBack));
+        OnPropertyChanged(nameof(CanGoForward));
+        GoBackCommand.NotifyCanExecuteChanged();
+        GoForwardCommand.NotifyCanExecuteChanged();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoBack))]
+    private void GoBack()
+    {
+        if (_navigationIndex <= 0)
+            return;
+        --_navigationIndex;
+        ShowPackage(_navigation[_navigationIndex], record: false);
+        NotifyNavigationState();
+    }
+
+    [RelayCommand(CanExecute = nameof(CanGoForward))]
+    private void GoForward()
+    {
+        if (_navigationIndex < 0 || _navigationIndex + 1 >= _navigation.Count)
+            return;
+        ++_navigationIndex;
+        ShowPackage(_navigation[_navigationIndex], record: false);
+        NotifyNavigationState();
+    }
+
+    private void NavigateToDependency(string name)
+    {
+        var target = FindPackage(name);
+        if (target is not null)
+            ShowPackage(target, record: true);
+    }
+
+    private void ShowPackage(PackageItemViewModel item, bool record)
+    {
+        EnsurePackageVisible(item);
+        var previous = _suppressNavigation;
+        _suppressNavigation = true;
+        SelectedPackage = item;
+        _suppressNavigation = previous;
+        if (record)
+            PushNavigation(item);
+        NotifyNavigationState();
+    }
+
+    /// <summary>
+    /// Clears view filters that would hide the target so dependency and
+    /// history navigation always lands on a visible list row.
+    /// </summary>
+    private void EnsurePackageVisible(PackageItemViewModel item)
+    {
+        var isDev = BackendInfo.IsDev(item.Model.Backend);
+        if (isDev != _isDevMode)
+            SetDevMode(isDev);
+
+        if (SearchText.Length > 0)
+            SearchText = string.Empty;
+        if (ShowUpdatesOnly)
+            ShowUpdatesOnly = false;
+        if (ShowOrphansOnly)
+            ShowOrphansOnly = false;
+
+        var chip = (ChipKind)item.Model.Backend;
+        if (_selectedChip != ChipKind.All && _selectedChip != chip)
+            SelectChip(chip);
     }
 
     private async Task RunOperationAsync(PackageOperation operation, IReadOnlyList<Package> packages)
@@ -1171,6 +1317,7 @@ public partial class MainWindowViewModel : ObservableObject
     private void RebuildDetail(PackageItemViewModel? item)
     {
         DetailFields.Clear();
+        ClearDependencies();
         if (item is null)
         {
             IsPackageSelected = false;
@@ -1208,8 +1355,8 @@ public partial class MainWindowViewModel : ObservableObject
         if (model.Url.Length > 0)
             DetailFields.Add(DetailFieldViewModel.Link(Loc.T("URL:"), model.Url));
         Add(Loc.T("Licenses:"), model.Licenses);
-        Add(Loc.T("Depends on:"), model.Depends);
         Add(Loc.T("Binaries:"), model.Binaries);
+        UpdateDependencies(model);
 
         var statusText = model.Status == PackageStatus.Installed ? string.Empty : BackendInfo.StatusText(model.Status);
         if (statusText.Length > 0)
@@ -1225,6 +1372,49 @@ public partial class MainWindowViewModel : ObservableObject
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);
+    }
+
+    private void ClearDependencies()
+    {
+        ForwardDependencies.Clear();
+        ReverseDependencies.Clear();
+        HasForwardDependencies = false;
+        HasReverseDependencies = false;
+    }
+
+    private void UpdateDependencies(Package model)
+    {
+        ClearDependencies();
+        if (model.Backend is not (Backend.Pacman or Backend.Aur))
+            return;
+
+        AddDependencies(ForwardDependencies, model.Depends);
+        AddDependencies(ReverseDependencies, model.RequiredBy);
+        HasForwardDependencies = ForwardDependencies.Count > 0;
+        HasReverseDependencies = ReverseDependencies.Count > 0;
+    }
+
+    private void AddDependencies(
+        ObservableCollection<DependencyViewModel> target, string raw)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var token in raw.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+        {
+            // "foo>=1.2" -> "foo"
+            var cut = token.IndexOfAny(['<', '>', '=']);
+            var name = (cut >= 0 ? token[..cut] : token).Trim();
+            if (name.Length == 0 || name.Equals("None", StringComparison.OrdinalIgnoreCase))
+                continue;
+            if (!seen.Add(name))
+                continue;
+
+            target.Add(new DependencyViewModel
+            {
+                Name = name,
+                IsAvailable = FindPackage(name) is not null,
+                NavigateCommand = new RelayCommand(() => NavigateToDependency(name)),
+            });
+        }
     }
 
     private async Task FetchCargoDescriptionAsync(Package package)

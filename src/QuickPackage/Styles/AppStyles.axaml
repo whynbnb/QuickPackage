@@ -63,6 +63,20 @@
     <Setter Property="Padding" Value="8,1"/>
   </Style>
 
+  <!-- Clickable dependency chips in the detail pane. -->
+  <Style Selector="Button.dependency">
+    <Setter Property="CornerRadius" Value="9"/>
+    <Setter Property="Padding" Value="8,1"/>
+    <Setter Property="FontSize" Value="11"/>
+    <Setter Property="Margin" Value="0,0,4,4"/>
+    <Setter Property="BorderThickness" Value="1"/>
+    <Setter Property="BorderBrush" Value="{DynamicResource CardBorderBrush}"/>
+    <Setter Property="Background" Value="{DynamicResource CardHoverBrush}"/>
+  </Style>
+  <Style Selector="Button.dependency:disabled">
+    <Setter Property="Opacity" Value="0.55"/>
+  </Style>
+
   <!-- Repository / origin tag, outlined so it reads as metadata. -->
   <Style Selector="Border.pill.tag">
     <Setter Property="CornerRadius" Value="7"/>

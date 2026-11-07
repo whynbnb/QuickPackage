@@ -44,6 +44,10 @@ public sealed class LocStrings : ObservableObject
     public string NoMatchingPackages => Loc.T("No matching packages");
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
     public string ShowOnlyOrphans => Loc.T("Show only orphan packages");
+    public string Back => Loc.T("Back");
+    public string Forward => Loc.T("Forward");
+    public string DependsOnDeps => Loc.T("Depends on");
+    public string RequiredByDeps => Loc.T("Required by");
 
     public string ActivityLog => Loc.T("Activity log");
     public string Stop => Loc.T("Stop");

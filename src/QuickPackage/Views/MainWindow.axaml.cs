@@ -30,6 +30,21 @@ public partial class MainWindow : Window, IDialogService
 
     private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName == nameof(MainWindowViewModel.SelectedPackage))
+        {
+            // Dependency/back-forward navigation selects a row that may be
+            // outside the current scroll position.
+            Dispatcher.UIThread.Post(() =>
+            {
+                if (_viewModel.SelectedPackage is { } item)
+                {
+                    PackageList.ScrollIntoView(item);
+                    DetailScroll.Offset = new Vector(0, 0);
+                }
+            }, DispatcherPriority.Background);
+            return;
+        }
+
         if (e.PropertyName is nameof(MainWindowViewModel.IsLogExpanded)
             or nameof(MainWindowViewModel.IsLogDetailed))
             ScrollLogToEnd();

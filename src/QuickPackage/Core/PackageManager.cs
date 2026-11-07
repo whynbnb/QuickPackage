@@ -448,6 +448,7 @@ public sealed partial class PackageManager
                 case "url": package.Url += " " + value; break;
                 case "licenses": package.Licenses += " " + value; break;
                 case "depends": package.Depends += " " + value; break;
+                case "requiredby": package.RequiredBy += " " + value; break;
             }
         }
 
@@ -499,6 +500,7 @@ public sealed partial class PackageManager
                 case "URL": package.Url = value; currentKey = "url"; break;
                 case "Licenses": package.Licenses = value; currentKey = "licenses"; break;
                 case "Depends On": package.Depends = value; currentKey = "depends"; break;
+                case "Required By": package.RequiredBy = value; currentKey = "requiredby"; break;
                 default: currentKey = null; break;
             }
         }

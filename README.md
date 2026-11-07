@@ -27,6 +27,8 @@ C# 14 and Avalonia.
 - Per-package install/uninstall in the detail pane, plus a bulk update
   action while the update filter is active; both the update count and the
   bulk action follow the selected backend chip
+- Clickable forward and reverse dependency chips for pacman/AUR packages,
+  with back/forward history navigation between viewed packages
 - Native **Wayland** windowing when the compositor is available, with an
   automatic X11/XWayland fallback otherwise
 - Stop a running refresh/update/operation with the footer button or `Esc`,
