@@ -12,6 +12,11 @@ C# 14 and Avalonia.
 - A prominent **System packages / Developer packages** switch keeps the two
   worlds apart: each side has its own filter chips, counters and update flow
 - Update detection per backend with available versions
+- **Installed / not installed / all** list filters (installed by default),
+  backed by the full pacman sync catalogue so uninstalled repository
+  packages can be searched, inspected and installed directly
+- **Package origin filter** with every repository present in the loaded
+  lists, so the view can be narrowed to e.g. core, extra or chaotic-aur
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
 - Rich pacman metadata in the detail pane — architecture, build date,

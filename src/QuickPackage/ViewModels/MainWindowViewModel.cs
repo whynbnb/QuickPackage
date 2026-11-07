@@ -92,6 +92,11 @@ public partial class MainWindowViewModel : ObservableObject
         CommandActivity.Finished += OnCommandFinished;
 
         L = new LocStrings();
+        _allOriginsLabel = Loc.T("All origins");
+        OriginOptions.Add(_allOriginsLabel);
+        _suppressOriginChange = true;
+        SelectedOrigin = _allOriginsLabel;
+        _suppressOriginChange = false;
         StatusMessage = Loc.T("Ready");
         BuildChips();
         RefreshModeUi();
@@ -267,6 +272,116 @@ public partial class MainWindowViewModel : ObservableObject
 
     private bool HasSystemBackend =>
         _pacmanEnabled || _aurEnabled || _flatpakEnabled || _cargoEnabled;
+
+    // ------------------------------------------------------- install / origin
+
+    private InstallStateFilter _installState = InstallStateFilter.Installed;
+    private string _allOriginsLabel = "All origins";
+    private bool _suppressOriginChange;
+
+    public ObservableCollection<string> OriginOptions { get; } = [];
+
+    public string AllOriginsLabel => _allOriginsLabel;
+
+    [ObservableProperty]
+    private string _selectedOrigin = string.Empty;
+
+    partial void OnSelectedOriginChanged(string value)
+    {
+        if (!_suppressOriginChange)
+            ApplyFilter();
+    }
+
+    public bool IsInstalledFilter
+    {
+        get => _installState == InstallStateFilter.Installed;
+        set
+        {
+            if (value)
+                SetInstallState(InstallStateFilter.Installed);
+            else
+                OnPropertyChanged();
+        }
+    }
+
+    public bool IsNotInstalledFilter
+    {
+        get => _installState == InstallStateFilter.NotInstalled;
+        set
+        {
+            if (value)
+                SetInstallState(InstallStateFilter.NotInstalled);
+            else
+                OnPropertyChanged();
+        }
+    }
+
+    public bool IsAllPackagesFilter
+    {
+        get => _installState == InstallStateFilter.All;
+        set
+        {
+            if (value)
+                SetInstallState(InstallStateFilter.All);
+            else
+                OnPropertyChanged();
+        }
+    }
+
+    private void SetInstallState(InstallStateFilter state)
+    {
+        if (_installState != state)
+        {
+            _installState = state;
+            SyncFilterSelection();
+            ApplyFilter();
+        }
+        OnPropertyChanged(nameof(IsInstalledFilter));
+        OnPropertyChanged(nameof(IsNotInstalledFilter));
+        OnPropertyChanged(nameof(IsAllPackagesFilter));
+        UpdateCounters();
+    }
+
+    private bool MatchesInstallState(PackageItemViewModel item) => _installState switch
+    {
+        InstallStateFilter.Installed => item.Model.Installed,
+        InstallStateFilter.NotInstalled => !item.Model.Installed,
+        _ => true,
+    };
+
+    private bool MatchesOrigin(PackageItemViewModel item)
+    {
+        var selected = SelectedOrigin;
+        if (string.IsNullOrEmpty(selected)
+            || string.Equals(selected, _allOriginsLabel, StringComparison.Ordinal))
+            return true;
+        return string.Equals(item.Model.Origin, selected, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Rebuilds the origin filter list from the loaded packages. The selected
+    /// origin is kept when it still exists and otherwise falls back to "all".
+    /// </summary>
+    private void RebuildOriginOptions()
+    {
+        var previous = SelectedOrigin ?? string.Empty;
+        _allOriginsLabel = Loc.T("All origins");
+        var origins = _all
+            .Select(item => item.Model.Origin)
+            .Where(origin => origin.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(origin => origin, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        _suppressOriginChange = true;
+        OriginOptions.Clear();
+        OriginOptions.Add(_allOriginsLabel);
+        foreach (var origin in origins)
+            OriginOptions.Add(origin);
+        SelectedOrigin = OriginOptions.Contains(previous) ? previous : _allOriginsLabel;
+        _suppressOriginChange = false;
+        OnPropertyChanged(nameof(AllOriginsLabel));
+    }
 
     partial void OnSearchTextChanged(string value) => ApplyFilter();
 
@@ -473,7 +588,9 @@ public partial class MainWindowViewModel : ObservableObject
 
     /// <summary>True when the item is both in the active mode and under the selected chip.</summary>
     private bool MatchesScope(PackageItemViewModel item)
-        => MatchesChip(item) && BackendInfo.IsDev(item.Model.Backend) == _isDevMode;
+        => MatchesChip(item)
+            && BackendInfo.IsDev(item.Model.Backend) == _isDevMode
+            && MatchesInstallState(item);
 
     /// <summary>
     /// Shows checkboxes only on rows the active filter can act on and checks
@@ -539,6 +656,12 @@ public partial class MainWindowViewModel : ObservableObject
         if (_isDevMode ? !isDev : isDev)
             return false;
 
+        if (!MatchesInstallState(item))
+            return false;
+
+        if (!MatchesOrigin(item))
+            return false;
+
         if (_selectedChip != ChipKind.All && (Backend)_selectedChip != backend)
             return false;
 
@@ -570,6 +693,10 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var item in _all)
         {
             var model = item.Model;
+            // Backend chips describe the rows the current install-state
+            // filter can show, so the default view keeps installed counts.
+            if (!MatchesInstallState(item))
+                continue;
             // Only rows the user can currently see take part in selection
             // counts; hidden backends must not leak into the toolbar.
             var inScope = MatchesScope(item);
@@ -722,6 +849,7 @@ public partial class MainWindowViewModel : ObservableObject
             // than leaving the list silently empty.
             if (GroupFilter.Length > 0 && !_all.Any(item => item.HasGroup(GroupFilter)))
                 GroupFilter = string.Empty;
+            RebuildOriginOptions();
             ApplyFilter();
             SyncFilterSelection();
             UpdateCounters();
@@ -953,6 +1081,13 @@ public partial class MainWindowViewModel : ObservableObject
         var isDev = BackendInfo.IsDev(item.Model.Backend);
         if (isDev != _isDevMode)
             SetDevMode(isDev);
+
+        if (!MatchesInstallState(item))
+            SetInstallState(item.Model.Installed
+                ? InstallStateFilter.Installed
+                : InstallStateFilter.NotInstalled);
+        if (!MatchesOrigin(item))
+            SelectedOrigin = _allOriginsLabel;
 
         if (SearchText.Length > 0)
             SearchText = string.Empty;
@@ -1399,12 +1534,15 @@ public partial class MainWindowViewModel : ObservableObject
             ? model.Version
             : (model.Version.Length == 0 ? "—" : model.Version) + " → " + model.NewVersion);
         Add(Loc.T("Origin:"), model.Origin);
+        if (!model.Installed)
+            Add(Loc.T("Status:"), Loc.T("Not installed"));
         Add(Loc.T("Size:"), model.Size);
         Add(Loc.T("Install date:"), model.InstallDate);
         Add(Loc.T("Build date:"), model.BuildDate);
-        Add(Loc.T("Install reason:"), model.Backend is Backend.Pacman or Backend.Aur
-            ? (model.Explicit ? Loc.T("Explicitly installed") : Loc.T("Installed as a dependency"))
-            : model.InstallReason);
+        if (model.Installed)
+            Add(Loc.T("Install reason:"), model.Backend is Backend.Pacman or Backend.Aur
+                ? (model.Explicit ? Loc.T("Explicitly installed") : Loc.T("Installed as a dependency"))
+                : model.InstallReason);
         Add(Loc.T("Architecture:"), model.Architecture);
         if (item.GroupChips.Count > 0)
             DetailFields.Add(DetailFieldViewModel.ChipList(Loc.T("Groups:"), item.GroupChips));
@@ -1428,7 +1566,9 @@ public partial class MainWindowViewModel : ObservableObject
         CanUpdateSelectedPackage = model.Status == PackageStatus.NeedsUpdate;
         CanUninstallSelectedPackage = model.Installed;
         IsInstalledSelectedPackage = model.Installed;
-        CanMakeExplicit = model.Backend is Backend.Pacman or Backend.Aur && !model.Explicit;
+        CanMakeExplicit = model.Installed
+            && model.Backend is Backend.Pacman or Backend.Aur
+            && !model.Explicit;
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);
@@ -1535,6 +1675,7 @@ public partial class MainWindowViewModel : ObservableObject
 
         L.NotifyAll();
         OnPropertyChanged(nameof(GroupFilterText));
+        RebuildOriginOptions();
         foreach (var item in LogItems)
             item.RefreshLocalization();
         UpdateCounters();

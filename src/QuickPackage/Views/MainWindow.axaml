@@ -75,7 +75,20 @@
 
     <!-- Filter chips -->
     <DockPanel Grid.Row="2" Margin="12,2,12,6">
+      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6"
+                  Margin="0,0,12,0" VerticalAlignment="Center">
+        <ToggleButton Classes="chip" Content="{Binding L.InstalledOnly}"
+                      IsChecked="{Binding IsInstalledFilter, Mode=TwoWay}"/>
+        <ToggleButton Classes="chip" Content="{Binding L.NotInstalledOnly}"
+                      IsChecked="{Binding IsNotInstalledFilter, Mode=TwoWay}"/>
+        <ToggleButton Classes="chip" Content="{Binding L.AllPackages}"
+                      IsChecked="{Binding IsAllPackagesFilter, Mode=TwoWay}"/>
+      </StackPanel>
       <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+        <ComboBox ItemsSource="{Binding OriginOptions}"
+                  SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
+                  MinWidth="128" FontSize="12" VerticalAlignment="Center"
+                  ToolTip.Tip="{Binding L.OriginFilterHint}"/>
         <Button Classes="groupfilter"
                 Content="{Binding GroupFilterText}"
                 Command="{Binding ClearGroupFilterCommand}"

@@ -45,6 +45,10 @@ public sealed class LocStrings : ObservableObject
     public string ShowOnlyUpdates => Loc.T("Show only packages with updates");
     public string ShowOnlyOrphans => Loc.T("Show only orphan packages");
     public string ClearGroupFilter => Loc.T("Clear group filter");
+    public string InstalledOnly => Loc.T("Installed");
+    public string NotInstalledOnly => Loc.T("Not installed");
+    public string AllPackages => Loc.T("All packages");
+    public string OriginFilterHint => Loc.T("Filter by package origin");
     public string Back => Loc.T("Back");
     public string Forward => Loc.T("Forward");
     public string DependsOnDeps => Loc.T("Depends on");

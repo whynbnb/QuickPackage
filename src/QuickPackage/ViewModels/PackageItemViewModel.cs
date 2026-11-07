@@ -70,8 +70,9 @@ public partial class PackageItemViewModel : ObservableObject
         }
     }
 
-    /// <summary>Only pacman/AUR packages carry an install reason.</summary>
-    public bool ShowInstallReason => Model.Backend is Backend.Pacman or Backend.Aur;
+    /// <summary>Only installed pacman/AUR packages carry an install reason.</summary>
+    public bool ShowInstallReason => Model.Installed
+        && Model.Backend is Backend.Pacman or Backend.Aur;
 
     public string InstallReasonText => Model.Explicit
         ? Loc.T("Explicit")
@@ -172,22 +173,26 @@ public partial class PackageItemViewModel : ObservableObject
         }
     }
 
-    public bool ShowBadge => Model.Status != PackageStatus.Idle;
+    public bool ShowBadge => Model.Status != PackageStatus.Idle || !Model.Installed;
 
-    public string BadgeText => Model.Status switch
-    {
-        PackageStatus.NeedsUpdate => Loc.T("Update"),
-        PackageStatus.Installed => Loc.T("Installed"),
-        PackageStatus.Updating => Loc.T("Updating…"),
-        PackageStatus.Removing => Loc.T("Removing…"),
-        PackageStatus.Failed => Loc.T("Failed"),
-        _ => string.Empty,
-    };
+    public string BadgeText => !Model.Installed
+        ? Loc.T("Not installed")
+        : Model.Status switch
+        {
+            PackageStatus.NeedsUpdate => Loc.T("Update"),
+            PackageStatus.Installed => Loc.T("Installed"),
+            PackageStatus.Updating => Loc.T("Updating…"),
+            PackageStatus.Removing => Loc.T("Removing…"),
+            PackageStatus.Failed => Loc.T("Failed"),
+            _ => string.Empty,
+        };
 
     public IBrush BadgeBackground
     {
         get
         {
+            if (!Model.Installed)
+                return Brush(120, 128, 140, 45);
             var (r, g, b) = Model.Status switch
             {
                 PackageStatus.NeedsUpdate => (246, 116, 0),
@@ -202,6 +207,8 @@ public partial class PackageItemViewModel : ObservableObject
     {
         get
         {
+            if (!Model.Installed)
+                return Brush(100, 108, 120, 255);
             var (r, g, b) = Model.Status switch
             {
                 PackageStatus.NeedsUpdate => (226, 100, 0),

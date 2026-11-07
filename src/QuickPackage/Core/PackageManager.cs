@@ -280,6 +280,8 @@ public sealed partial class PackageManager
         var lookup = new Dictionary<(Backend, string), Package>();
         foreach (var package in loaded)
         {
+            if (!package.Installed)
+                continue;
             lookup.TryAdd((package.Backend, package.Name), package);
             if (package.PackageId.Length > 0)
                 lookup.TryAdd((package.Backend, package.PackageId), package);
@@ -392,7 +394,7 @@ public sealed partial class PackageManager
     {
         foreach (var package in loaded)
         {
-            if (package.Backend != backend)
+            if (package.Backend != backend || !package.Installed)
                 continue;
             entries.Add(new SnapshotEntry
             {
@@ -529,18 +531,51 @@ public sealed partial class PackageManager
         }
         Flush();
 
-        // pacman -Qi carries no repository on every system; map installed
-        // packages to their repo via "pacman -Sl"; the rest is foreign (AUR).
-        var syncList = await CommandRunner.RunAsync("pacman", ["-Sl"], _queryTimeoutMilliseconds, environment, cancellationToken)
+        // "pacman -Ss" lists every sync package with its description and an
+        // [installed] marker, so one pass provides both the origin map for
+        // installed packages and the uninstalled catalogue. "pacman -Qi"
+        // itself carries no repository on every system.
+        var syncRun = await CommandRunner.RunAsync(
+            "pacman", ["-Ss"], _queryTimeoutMilliseconds, environment, cancellationToken)
             .ConfigureAwait(false);
-        var repoByName = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var rawLine in syncList.Output.Split('\n'))
+        var sync = new Dictionary<string, SyncEntry>(StringComparer.Ordinal);
+        var syncOrder = new List<string>();
+        SyncEntry? syncEntry = null;
+        foreach (var rawLine in syncRun.Output.Split('\n'))
         {
-            var match = SyncRepoRegex().Match(rawLine.Trim());
+            var line = rawLine.TrimEnd('\r');
+            var match = SyncSearchRegex().Match(line);
             if (match.Success)
-                repoByName.TryAdd(match.Groups[2].Value, match.Groups[1].Value);
+            {
+                syncEntry = new SyncEntry
+                {
+                    Repo = match.Groups["repo"].Value,
+                    Name = match.Groups["name"].Value,
+                    Version = match.Groups["version"].Value,
+                    MarkedInstalled = match.Groups["flags"].Value.Contains(
+                        "[installed]", StringComparison.Ordinal),
+                };
+                if (!sync.TryGetValue(syncEntry.Name, out var existing))
+                {
+                    sync.Add(syncEntry.Name, syncEntry);
+                    syncOrder.Add(syncEntry.Name);
+                }
+                else if (!existing.MarkedInstalled && syncEntry.MarkedInstalled)
+                {
+                    // The repo pacman considers the installed source wins.
+                    sync[syncEntry.Name] = syncEntry;
+                }
+                continue;
+            }
+            if (syncEntry is not null && line.Trim().Length > 0)
+            {
+                var text = line.Trim();
+                syncEntry.Description = syncEntry.Description.Length == 0
+                    ? text
+                    : syncEntry.Description + " " + text;
+            }
         }
-        var enabled = new List<Package>(result.Count);
+
         var orphanRun = await CommandRunner.RunAsync(
             "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken,
             expectedExits: [new CommandRunner.ExpectedExit(1, "No orphans", RequireEmptyOutput: true)]).ConfigureAwait(false);
@@ -551,12 +586,16 @@ public sealed partial class PackageManager
             if (name.Length > 0)
                 orphans.Add(name);
         }
+
+        var enabled = new List<Package>(result.Count + sync.Count);
+        var installedNames = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in result)
         {
             item.Orphan = orphans.Contains(item.Name);
-            if (repoByName.TryGetValue(item.Name, out var repo))
+            installedNames.Add(item.Name);
+            if (sync.TryGetValue(item.Name, out var entry))
             {
-                item.Origin = repo;
+                item.Origin = entry.Repo;
                 item.Backend = Backend.Pacman;
                 item.Foreign = false;
                 if (_enabled[Backend.Pacman])
@@ -571,7 +610,38 @@ public sealed partial class PackageManager
                     enabled.Add(item);
             }
         }
+
+        // Repo packages that are not installed are kept available for the
+        // "not installed" / "all" list filters and for direct installation.
+        if (_enabled[Backend.Pacman])
+        {
+            foreach (var name in syncOrder)
+            {
+                if (installedNames.Contains(name))
+                    continue;
+                var entry = sync[name];
+                enabled.Add(new Package
+                {
+                    Name = entry.Name,
+                    PackageId = entry.Name,
+                    Version = entry.Version,
+                    Description = entry.Description,
+                    Origin = entry.Repo,
+                    Backend = Backend.Pacman,
+                    Installed = false,
+                });
+            }
+        }
         return enabled;
+    }
+
+    private sealed class SyncEntry
+    {
+        public string Repo { get; init; } = string.Empty;
+        public string Name { get; init; } = string.Empty;
+        public string Version { get; init; } = string.Empty;
+        public bool MarkedInstalled { get; init; }
+        public string Description { get; set; } = string.Empty;
     }
 
     private async Task<List<Package>> QueryFlatpakAsync(CancellationToken cancellationToken)
@@ -1343,8 +1413,8 @@ public sealed partial class PackageManager
     private static string CleanList(string value)
         => value == "None" ? string.Empty : value;
 
-    [GeneratedRegex(@"^(\S+) (\S+) \S+ \[installed\]$")]
-    private static partial Regex SyncRepoRegex();
+    [GeneratedRegex(@"^(?<repo>[^/\s]+)/(?<name>\S+)\s+(?<version>\S+)(?<flags>.*)$")]
+    private static partial Regex SyncSearchRegex();
 
     [GeneratedRegex(@"^\s*""([a-zA-Z0-9_.+-]+) ([^\s""]+) \(([^)]*)\)""\s*=\s*\[([^\]]*)\]")]
     private static partial Regex CargoEntryRegex();
