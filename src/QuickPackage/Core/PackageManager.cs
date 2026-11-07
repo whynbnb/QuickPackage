@@ -1072,6 +1072,90 @@ public sealed partial class PackageManager
         return updates;
     }
 
+    // ------------------------------------------------------------- file list
+
+    public sealed record BackupFileInfo(string Path, string Status);
+
+    public sealed record PackageFilesResult(
+        IReadOnlyList<string> Files,
+        IReadOnlyList<BackupFileInfo> BackupFiles,
+        IReadOnlyList<string> Remnants);
+
+    /// <summary>
+    /// Lists the files owned by an installed package plus its modified backup
+    /// files and any .pacnew/.pacsave files left next to them.
+    /// </summary>
+    public async Task<PackageFilesResult> GetPackageFilesAsync(
+        Package package, CancellationToken cancellationToken)
+    {
+        var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
+        var files = new List<string>();
+        var query = await CommandRunner.RunAsync(
+            "pacman", ["-Ql", package.EffectiveId], _queryTimeoutMilliseconds,
+            environment, cancellationToken).ConfigureAwait(false);
+        foreach (var rawLine in query.Output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            var space = line.IndexOf(' ');
+            if (space > 0)
+                files.Add(line[(space + 1)..]);
+        }
+
+        var backups = new List<BackupFileInfo>();
+        var info = await CommandRunner.RunAsync(
+            "pacman", ["-Qii", package.EffectiveId], _queryTimeoutMilliseconds,
+            environment, cancellationToken).ConfigureAwait(false);
+        var inBackup = false;
+        foreach (var rawLine in info.Output.Split('\n'))
+        {
+            var line = rawLine.TrimEnd('\r');
+            if (line.StartsWith("Backup Files", StringComparison.OrdinalIgnoreCase))
+            {
+                var separator = line.IndexOf(" : ", StringComparison.Ordinal);
+                if (separator >= 0)
+                    AddBackup(line[(separator + 3)..].Trim());
+                inBackup = true;
+                continue;
+            }
+            if (inBackup)
+            {
+                if (line.Length == 0 || line.IndexOf(" : ", StringComparison.Ordinal) >= 0)
+                    inBackup = false;
+                else
+                    AddBackup(line.Trim());
+            }
+        }
+
+        void AddBackup(string text)
+        {
+            var marker = text.LastIndexOf(" [", StringComparison.Ordinal);
+            var path = marker > 0 ? text[..marker].Trim() : text;
+            var status = marker > 0 ? text[(marker + 2)..].TrimEnd(']') : string.Empty;
+            if (path.Length > 0)
+                backups.Add(new BackupFileInfo(path, status));
+        }
+
+        var remnants = new List<string>();
+        foreach (var backup in backups)
+        {
+            foreach (var suffix in new[] { ".pacnew", ".pacsave" })
+            {
+                var candidate = backup.Path + suffix;
+                try
+                {
+                    if (File.Exists(candidate))
+                        remnants.Add(candidate);
+                }
+                catch
+                {
+                    // Permissions may hide /etc entries; ignore them.
+                }
+            }
+        }
+
+        return new PackageFilesResult(files, backups, remnants);
+    }
+
     // --------------------------------------------------------- remote search
 
     /// <summary>

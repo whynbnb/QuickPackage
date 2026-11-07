@@ -1,0 +1,35 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:QuickPackage.ViewModels"
+        x:Class="QuickPackage.Views.PackageFilesWindow"
+        x:DataType="vm:PackageFilesViewModel"
+        Width="820" Height="680"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False">
+  <Grid RowDefinitions="Auto,Auto,*,Auto" Margin="20" RowSpacing="12">
+    <StackPanel Grid.Row="0" Spacing="2">
+      <TextBlock Text="{Binding Title}" Classes="h1"/>
+      <TextBlock Text="{Binding Subtitle}" Classes="subtle" FontSize="12" TextWrapping="Wrap"/>
+    </StackPanel>
+
+    <TextBlock Grid.Row="1" Text="{Binding SummaryText}" Classes="subtle" FontSize="12"/>
+
+    <TabControl Grid.Row="2">
+      <TabItem Header="{Binding FilesTab}">
+        <TextBox Text="{Binding FilesText}" IsReadOnly="True" AcceptsReturn="True"
+                 TextWrapping="NoWrap" Classes="mono" FontSize="12" Background="Transparent"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+      </TabItem>
+      <TabItem Header="{Binding BackupTab}">
+        <TextBox Text="{Binding BackupText}" IsReadOnly="True" AcceptsReturn="True"
+                 TextWrapping="NoWrap" Classes="mono" FontSize="12" Background="Transparent"
+                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                 ScrollViewer.HorizontalScrollBarVisibility="Auto"/>
+      </TabItem>
+    </TabControl>
+
+    <Button Grid.Row="3" Content="{Binding CloseText}" MinWidth="88"
+            HorizontalAlignment="Right" IsDefault="True" Click="OnClose"/>
+  </Grid>
+</Window>

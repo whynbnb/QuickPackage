@@ -243,6 +243,17 @@ public partial class MainWindowViewModel : ObservableObject
     private bool _canMakeExplicit;
 
     [ObservableProperty]
+    private bool _canShowPackageFiles;
+
+    public bool CanMoreActions => CanMakeExplicit || CanShowPackageFiles;
+
+    partial void OnCanMakeExplicitChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    partial void OnCanShowPackageFilesChanged(bool value)
+        => OnPropertyChanged(nameof(CanMoreActions));
+
+    [ObservableProperty]
     private bool _isInstalledSelectedPackage;
 
     [ObservableProperty]
@@ -1800,6 +1811,30 @@ public partial class MainWindowViewModel : ObservableObject
     }
 
     [RelayCommand]
+    private async Task ShowPackageFilesAsync(PackageItemViewModel? item)
+    {
+        if (item is null || IsBusy)
+            return;
+        BeginBusy();
+        try
+        {
+            StatusMessage = Loc.T("Listing files for %1…", item.Name);
+            var result = await _manager.GetPackageFilesAsync(item.Model, CancellationToken.None);
+            var viewModel = new PackageFilesViewModel(item.Name, result);
+            await _dialogs.ShowPackageFilesAsync(viewModel);
+            StatusMessage = Loc.T("Ready");
+        }
+        catch (Exception exception)
+        {
+            StatusMessage = exception.Message;
+        }
+        finally
+        {
+            EndBusy();
+        }
+    }
+
+    [RelayCommand]
     private async Task MakeExplicitAsync(PackageItemViewModel? item)
     {
         if (item is null || IsBusy)
@@ -2097,6 +2132,7 @@ public partial class MainWindowViewModel : ObservableObject
             CanUninstallSelectedPackage = false;
             IsInstalledSelectedPackage = false;
             CanMakeExplicit = false;
+            CanShowPackageFiles = false;
             return;
         }
 
@@ -2166,6 +2202,8 @@ public partial class MainWindowViewModel : ObservableObject
         CanMakeExplicit = model.Installed
             && model.Backend is Backend.Pacman or Backend.Aur
             && !model.Explicit;
+        CanShowPackageFiles = model.Installed
+            && model.Backend is Backend.Pacman or Backend.Aur;
 
         if (model.Backend == Backend.Cargo && model.Description.Length == 0)
             _ = FetchCargoDescriptionAsync(model);

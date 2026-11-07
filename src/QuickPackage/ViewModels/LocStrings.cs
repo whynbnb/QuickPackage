@@ -53,6 +53,7 @@ public sealed class LocStrings : ObservableObject
     public string UninstallDetail => Loc.T("Uninstall");
     public string MakeExplicit => Loc.T("Make Explicit");
     public string More => Loc.T("More");
+    public string Files => Loc.T("Files");
     public string Diagnostics => Loc.T("Diagnose backends");
     public string BackendsDisabledHint => Loc.T("All package backends are disabled. Enable at least one in Settings.");
     public string NoMatchingPackages => Loc.T("No matching packages");

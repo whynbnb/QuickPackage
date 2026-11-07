@@ -350,9 +350,12 @@
                         IsEnabled="{Binding CanUninstallSelectedPackage}"/>
                 <!-- Promotion to explicit is rare, so it lives in a small menu. -->
                 <Button Classes="detail" Content="{Binding L.More}"
-                        IsVisible="{Binding CanMakeExplicit}">
+                        IsVisible="{Binding CanMoreActions}">
                   <Button.Flyout>
                     <MenuFlyout>
+                      <MenuItem Header="{Binding L.Files}"
+                                Command="{Binding ShowPackageFilesCommand}"
+                                CommandParameter="{Binding SelectedPackage}"/>
                       <MenuItem Header="{Binding L.MakeExplicit}"
                                 Command="{Binding MakeExplicitCommand}"
                                 CommandParameter="{Binding SelectedPackage}"/>

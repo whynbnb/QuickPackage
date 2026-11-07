@@ -20,6 +20,8 @@ public interface IDialogService
 
     Task ShowHistoryAsync(HistoryViewModel viewModel);
 
+    Task ShowPackageFilesAsync(PackageFilesViewModel viewModel);
+
     Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null);
 }

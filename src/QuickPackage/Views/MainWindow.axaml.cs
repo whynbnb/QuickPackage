@@ -224,6 +224,12 @@ public partial class MainWindow : Window, IDialogService
         await dialog.ShowDialog(this);
     }
 
+    public async Task ShowPackageFilesAsync(PackageFilesViewModel viewModel)
+    {
+        var dialog = new PackageFilesWindow { DataContext = viewModel };
+        await dialog.ShowDialog(this);
+    }
+
     public async Task<string?> AskPasswordAsync(
         string title, string message, Func<string, Task<bool>>? validate = null)
     {
