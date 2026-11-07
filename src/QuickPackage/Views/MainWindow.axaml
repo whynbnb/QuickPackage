@@ -120,9 +120,11 @@
                 IsVisible="{Binding ShowBulkUninstall}"
                 IsEnabled="{Binding CanBulkUninstall}"/>
         <Button Classes="toolbar" Content="{Binding L.Snapshots}"
-                Command="{Binding SnapshotsCommand}"/>
+                Command="{Binding SnapshotsCommand}"
+                IsVisible="{Binding !IsSelectionMode}"/>
         <Button Classes="toolbar" Content="{Binding L.CacheCleanup}"
-                Command="{Binding CacheCleanupCommand}"/>
+                Command="{Binding CacheCleanupCommand}"
+                IsVisible="{Binding !IsSelectionMode}"/>
         <Button Classes="toolbar" Content="{Binding RemoveSelectedText}"
                 Command="{Binding RemoveSelectedOrphansCommand}"
                 IsVisible="{Binding ShowOrphansOnly}"
