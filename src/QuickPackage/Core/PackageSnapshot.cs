@@ -58,29 +58,7 @@ public static class SnapshotStore
         {
             if (!File.Exists(FilePath))
                 return [];
-            var json = File.ReadAllText(FilePath);
-            var snapshots = JsonSerializer.Deserialize<List<PackageSnapshot>>(json, Options) ?? [];
-            foreach (var snapshot in snapshots)
-            {
-                if (snapshot.SchemaVersion >= PackageSnapshot.CurrentSchema)
-                    continue;
-                foreach (var entry in snapshot.Packages)
-                {
-                    if (entry.Backend is Backend.Pacman or Backend.Aur)
-                    {
-                        // Version 1 stored only the explicit lists.
-                        if (snapshot.SchemaVersion < 2)
-                            entry.Explicit = true;
-                    }
-                    else
-                    {
-                        // Other backends have no install-reason concept.
-                        entry.Explicit = null;
-                    }
-                }
-                snapshot.SchemaVersion = PackageSnapshot.CurrentSchema;
-            }
-            return snapshots;
+            return Deserialize(File.ReadAllText(FilePath));
         }
         catch
         {
@@ -89,12 +67,41 @@ public static class SnapshotStore
         }
     }
 
+    public static List<PackageSnapshot> Deserialize(string json)
+    {
+        var snapshots = JsonSerializer.Deserialize<List<PackageSnapshot>>(json, Options) ?? [];
+        foreach (var snapshot in snapshots)
+        {
+            if (snapshot.SchemaVersion >= PackageSnapshot.CurrentSchema)
+                continue;
+            foreach (var entry in snapshot.Packages)
+            {
+                if (entry.Backend is Backend.Pacman or Backend.Aur)
+                {
+                    // Version 1 stored only the explicit lists.
+                    if (snapshot.SchemaVersion < 2)
+                        entry.Explicit = true;
+                }
+                else
+                {
+                    // Other backends have no install-reason concept.
+                    entry.Explicit = null;
+                }
+            }
+            snapshot.SchemaVersion = PackageSnapshot.CurrentSchema;
+        }
+        return snapshots;
+    }
+
+    public static string Serialize(IEnumerable<PackageSnapshot> snapshots)
+        => JsonSerializer.Serialize(snapshots.ToList(), Options);
+
     public static void Save(IEnumerable<PackageSnapshot> snapshots)
     {
         var directory = Path.GetDirectoryName(FilePath);
         if (!string.IsNullOrEmpty(directory))
             Directory.CreateDirectory(directory);
-        var json = JsonSerializer.Serialize(snapshots.ToList(), Options);
+        var json = Serialize(snapshots);
         var temporary = FilePath + ".tmp";
         File.WriteAllText(temporary, json);
         File.Move(temporary, FilePath, overwrite: true);

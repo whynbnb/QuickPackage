@@ -147,10 +147,16 @@ public partial class SnapshotsViewModel : ObservableObject
     [ObservableProperty]
     private bool _canDelete;
 
+    [ObservableProperty]
+    private bool _canRestore;
+
     public string Title => Loc.T("Package snapshots");
     public string Subtitle => Loc.T("Compare package sets captured at different times");
     public string CreateText => Loc.T("Create snapshot");
     public string DeleteText => Loc.T("Delete selected");
+    public string ExportText => Loc.T("Export");
+    public string ImportText => Loc.T("Import");
+    public string RestoreText => Loc.T("Restore missing");
     public string PackageHeader => Loc.T("Package");
     public string BackendHeader => Loc.T("Backend / origin");
     public string ReasonHeader => Loc.T("Install reason");
@@ -162,6 +168,9 @@ public partial class SnapshotsViewModel : ObservableObject
     partial void OnSelectedReasonFilterChanged(OptionItem? value) => Rebuild();
 
     partial void OnSearchTextChanged(string value) => Rebuild();
+
+    partial void OnIsBusyChanged(bool value)
+        => CanRestore = Items.Any(item => item.IsSelected) && !value;
 
     private SnapshotListItemViewModel AddItem(PackageSnapshot snapshot)
     {
@@ -206,6 +215,99 @@ public partial class SnapshotsViewModel : ObservableObject
         }
     }
 
+    /// <summary>Writes the selected snapshots to a portable JSON file.</summary>
+    public async Task ExportSelectedAsync(string path)
+    {
+        var selected = Items.Where(item => item.IsSelected).Select(item => item.Snapshot).ToList();
+        if (selected.Count == 0)
+            return;
+        await File.WriteAllTextAsync(path, SnapshotStore.Serialize(selected));
+        HintText = Loc.T("Exported %1 snapshots", selected.Count);
+    }
+
+    /// <summary>Imports snapshots from a JSON file and keeps the current set intact.</summary>
+    public async Task ImportAsync(string path)
+    {
+        var imported = SnapshotStore.Deserialize(await File.ReadAllTextAsync(path));
+        var existing = Items.Select(item => item.Snapshot).ToList();
+        var added = 0;
+        foreach (var snapshot in imported)
+        {
+            if (existing.Any(other => other.Id == snapshot.Id))
+                snapshot.Id = Guid.NewGuid().ToString("N");
+            var item = AddItem(snapshot);
+            item.IsSelected = true;
+            ++added;
+        }
+        Persist();
+        Rebuild();
+        HintText = Loc.T("Imported %1 snapshots", added);
+    }
+
+    /// <summary>
+    /// Installs packages present in the newest selected snapshot but missing
+    /// now. Versions are not pinned; the backends install their current
+    /// candidate for each name.
+    /// </summary>
+    public async Task<int> RestoreMissingAsync()
+    {
+        var snapshot = Items
+            .Where(item => item.IsSelected)
+            .OrderByDescending(item => item.Snapshot.CreatedAt)
+            .FirstOrDefault()?.Snapshot;
+        if (snapshot is null || IsBusy)
+            return 0;
+
+        IsBusy = true;
+        var count = 0;
+        try
+        {
+            HintText = Loc.T("Loading the installed package set…");
+            var installed = await _manager.LoadPackagesAsync(CancellationToken.None);
+            var present = installed
+                .Where(package => package.Installed)
+                .Select(package => (package.Backend, package.Name))
+                .ToHashSet();
+
+            var missing = snapshot.Packages
+                .Where(entry => _manager.IsBackendEnabled(entry.Backend))
+                .Where(entry => !present.Contains((entry.Backend, entry.Name)))
+                .GroupBy(entry => (entry.Backend, entry.Name))
+                .Select(group => group.First())
+                .Select(entry => new Package
+                {
+                    Name = entry.Name,
+                    PackageId = entry.Name,
+                    Version = entry.Version,
+                    Origin = entry.Origin,
+                    Backend = entry.Backend,
+                    Installed = false,
+                })
+                .ToList();
+
+            if (missing.Count == 0)
+            {
+                HintText = Loc.T("Everything in this snapshot is already installed.");
+                return 0;
+            }
+
+            count = missing.Count;
+            HintText = Loc.T("Installing %1 missing packages…", count);
+            await _manager.RunOperationAsync(PackageOperation.Install, missing, CancellationToken.None);
+            HintText = Loc.T("Restore requested for %1 packages", count);
+            return count;
+        }
+        catch (Exception exception)
+        {
+            HintText = exception.Message;
+            return 0;
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
     /// <summary>Removes every checked snapshot after the window confirms it.</summary>
     public void DeleteSelected()
     {
@@ -236,6 +338,7 @@ public partial class SnapshotsViewModel : ObservableObject
 
         ShowEmptyList = Items.Count == 0;
         CanDelete = selected.Count > 0;
+        CanRestore = selected.Count > 0 && !IsBusy;
         ShowComparison = selected.Count >= 1;
 
         Columns.Clear();

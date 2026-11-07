@@ -17,6 +17,12 @@
         <Button Content="{Binding CreateText}"
                 Command="{Binding CreateSnapshotCommand}"
                 IsEnabled="{Binding !IsBusy}"/>
+        <Button Content="{Binding ExportText}" Click="OnExport"
+                IsEnabled="{Binding CanDelete}"/>
+        <Button Content="{Binding ImportText}" Click="OnImport"
+                IsEnabled="{Binding !IsBusy}"/>
+        <Button Content="{Binding RestoreText}" Click="OnRestore"
+                IsEnabled="{Binding CanRestore}"/>
         <Button Classes="danger" Content="{Binding DeleteText}"
                 IsEnabled="{Binding CanDelete}"
                 Click="OnDelete"/>
