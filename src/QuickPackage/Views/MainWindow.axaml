@@ -215,7 +215,7 @@
                    Padding="2">
             <ListBox.ItemTemplate>
               <DataTemplate x:DataType="vm:PackageItemViewModel">
-                <Border Classes="card">
+                <Border Classes="card" PointerPressed="OnPackagePointerPressed">
                   <Border.ContextMenu>
                     <ContextMenu>
                       <MenuItem Header="{Binding InstallText}" Command="{Binding InstallCommand}"

@@ -181,6 +181,20 @@ public partial class MainWindow : Window, IDialogService
             _viewModel.SaveContentSplitRatio(left / (left + right));
     }
 
+    private void OnPackagePointerPressed(object? sender, PointerPressedEventArgs e)
+    {
+        if (sender is not Control control
+            || !e.GetCurrentPoint(control).Properties.IsRightButtonPressed)
+            return;
+        if (control.DataContext is PackageItemViewModel item)
+            _viewModel.SelectedPackage = item;
+        if (control.ContextMenu is { } menu)
+        {
+            menu.Open(control);
+            e.Handled = true;
+        }
+    }
+
     private async void OnInstallLocalPackage(object? sender, RoutedEventArgs e)
     {
         var files = await StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
