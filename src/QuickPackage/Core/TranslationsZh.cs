@@ -311,6 +311,8 @@ internal static class TranslationsZh
         ["Update status"] = "更新状态",
         ["Sort the package list"] = "排序软件包列表",
         ["Toggle the sort direction"] = "切换排序方向",
+        ["Filter installed pacman/AUR packages by install reason"] = "按安装原因筛选已安装的 pacman/AUR 软件包",
+        ["Any reason"] = "不限",
         ["Search AUR"] = "搜索 AUR",
         ["Search the AUR by name and description"] = "按名称和描述搜索 AUR",
         ["Searching the AUR…"] = "正在搜索 AUR…",

@@ -108,6 +108,7 @@ public partial class MainWindowViewModel : ObservableObject
         StatusMessage = Loc.T("Ready");
         BuildChips();
         BuildSortOptions();
+        BuildReasonOptions();
         LoadSearchHistory();
         RefreshModeUi();
         UpdateCounters();
@@ -380,6 +381,7 @@ public partial class MainWindowViewModel : ObservableObject
         || ShowOrphansOnly
         || IsSelectionMode
         || _installState != InstallStateFilter.Installed
+        || ReasonFilterValue != "any"
         || !string.Equals(SelectedOrigin, _allOriginsLabel, StringComparison.Ordinal);
 
     [ObservableProperty]
@@ -424,6 +426,9 @@ public partial class MainWindowViewModel : ObservableObject
             SelectedOrigin = _allOriginsLabel;
         if (IsSelectionMode)
             IsSelectionMode = false;
+        _suppressReasonChange = true;
+        SelectedReasonOption = ReasonOptions[0];
+        _suppressReasonChange = false;
         SelectChip(ChipKind.All);
         UpdateActionBar();
     }
@@ -489,6 +494,41 @@ public partial class MainWindowViewModel : ObservableObject
     public ObservableCollection<string> OriginOptions { get; } = [];
 
     public ObservableCollection<OptionItem> SortOptions { get; } = [];
+
+    public ObservableCollection<OptionItem> ReasonOptions { get; } = [];
+
+    private bool _suppressReasonChange;
+
+    [ObservableProperty]
+    private OptionItem? _selectedReasonOption;
+
+    public bool ShowReasonFilter =>
+        !_isDevMode && _selectedChip is ChipKind.Pacman or ChipKind.Aur;
+
+    public string ReasonFilterValue => SelectedReasonOption?.Value ?? "any";
+
+    partial void OnSelectedReasonOptionChanged(OptionItem? value)
+    {
+        if (_suppressReasonChange)
+            return;
+        if (value?.Value is "explicit" or "dependency"
+            && _installState != InstallStateFilter.Installed)
+        {
+            SetInstallState(InstallStateFilter.Installed);
+        }
+        ApplyFilter();
+        NotifyFilterState();
+    }
+
+    private void BuildReasonOptions()
+    {
+        ReasonOptions.Add(new OptionItem { Value = "any", Label = Loc.T("Any reason") });
+        ReasonOptions.Add(new OptionItem { Value = "explicit", Label = Loc.T("Explicit") });
+        ReasonOptions.Add(new OptionItem { Value = "dependency", Label = Loc.T("Dependency") });
+        _suppressReasonChange = true;
+        SelectedReasonOption = ReasonOptions[0];
+        _suppressReasonChange = false;
+    }
 
     public ObservableCollection<string> SearchHistory => _searchHistory;
 
@@ -831,6 +871,13 @@ public partial class MainWindowViewModel : ObservableObject
             GroupFilter = string.Empty;
         if (dev)
             SelectChip(ChipKind.All);
+        if (dev && ReasonFilterValue != "any")
+        {
+            _suppressReasonChange = true;
+            SelectedReasonOption = ReasonOptions.FirstOrDefault(option => option.Value == "any")
+                ?? ReasonOptions.FirstOrDefault();
+            _suppressReasonChange = false;
+        }
         RefreshModeUi(adjustMode: false);
         RebuildOriginOptions();
         ApplyFilter();
@@ -863,6 +910,7 @@ public partial class MainWindowViewModel : ObservableObject
             SelectChip(ChipKind.All);
         OnPropertyChanged(nameof(ShowEmpty));
         NotifySearchAvailability();
+        OnPropertyChanged(nameof(ShowReasonFilter));
     }
 
     private void SetChipVisible(ChipKind kind, bool visible)
@@ -921,6 +969,14 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var chip in Chips)
             chip.IsChecked = chip.Kind == kind;
         _suppressChipEvents = false;
+        if (kind is not (ChipKind.Pacman or ChipKind.Aur) && ReasonFilterValue != "any")
+        {
+            _suppressReasonChange = true;
+            SelectedReasonOption = ReasonOptions.FirstOrDefault(option => option.Value == "any")
+                ?? ReasonOptions.FirstOrDefault();
+            _suppressReasonChange = false;
+        }
+        OnPropertyChanged(nameof(ShowReasonFilter));
         RebuildOriginOptions();
         ApplyFilter();
         // Narrowing the backend also narrows the bulk selection, otherwise
@@ -958,12 +1014,9 @@ public partial class MainWindowViewModel : ObservableObject
         var filtered = (ShowUpdatesOnly || ShowOrphansOnly) && !IsSelectionMode;
         foreach (var item in _all)
         {
-            var inScope = MatchesScope(item);
-            var selectable = filtered
-                && inScope
-                && ((ShowUpdatesOnly && item.Model.Status == PackageStatus.NeedsUpdate)
-                    || (ShowOrphansOnly && item.Model.Orphan));
-            item.ShowSelection = IsSelectionMode ? inScope : selectable;
+            var accepted = Accepts(item);
+            var selectable = filtered && accepted;
+            item.ShowSelection = IsSelectionMode ? accepted : selectable;
             if (filtered)
                 item.IsSelected = selectable;
             else if (!IsSelectionMode)
@@ -1189,6 +1242,17 @@ public partial class MainWindowViewModel : ObservableObject
         if (!MatchesOrigin(item))
             return false;
 
+        if (ReasonFilterValue is "explicit" or "dependency"
+            && model.Backend is Backend.Pacman or Backend.Aur)
+        {
+            if (!model.Installed)
+                return false;
+            if (ReasonFilterValue == "explicit" && !model.Explicit)
+                return false;
+            if (ReasonFilterValue == "dependency" && model.Explicit)
+                return false;
+        }
+
         if (_selectedChip != ChipKind.All && (Backend)_selectedChip != backend)
             return false;
 
@@ -1227,8 +1291,8 @@ public partial class MainWindowViewModel : ObservableObject
             if (!MatchesInstallState(item))
                 continue;
             // Only rows the user can currently see take part in selection
-            // counts; hidden backends must not leak into the toolbar.
-            var inScope = MatchesScope(item);
+            // counts; hidden filters must not leak into the toolbar.
+            var inScope = Accepts(item);
             if (model.Selected && inScope)
             {
                 ++selected;
@@ -1918,7 +1982,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task InstallSelectedAsync()
     {
         var packages = _all
-            .Where(item => MatchesScope(item) && item.Model.Selected && !item.Model.Installed)
+            .Where(item => Accepts(item) && item.Model.Selected && !item.Model.Installed)
             .Select(item => item.Model)
             .ToList();
         if (packages.Count == 0)
@@ -1936,7 +2000,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task UninstallSelectedAsync()
     {
         var packages = _all
-            .Where(item => MatchesScope(item) && item.Model.Selected && item.Model.Installed)
+            .Where(item => Accepts(item) && item.Model.Selected && item.Model.Installed)
             .Select(item => item.Model)
             .ToList();
         if (packages.Count == 0)
@@ -1954,7 +2018,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task UpdateSelectedAsync()
     {
         var packages = _all
-            .Where(item => MatchesScope(item)
+            .Where(item => Accepts(item)
                 && item.Model.Selected
                 && item.Model.Status == PackageStatus.NeedsUpdate)
             .Select(item => item.Model)
@@ -1992,7 +2056,7 @@ public partial class MainWindowViewModel : ObservableObject
     private async Task RemoveSelectedOrphansAsync()
     {
         var packages = _all
-            .Where(item => MatchesScope(item) && item.Model.Selected && item.Model.Orphan)
+            .Where(item => Accepts(item) && item.Model.Selected && item.Model.Orphan)
             .Select(item => item.Model)
             .ToList();
         if (packages.Count == 0)

@@ -96,6 +96,12 @@
       <!-- Actions live beside the search field so they never consume list height. -->
       <WrapPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right"
                  VerticalAlignment="Center">
+        <ComboBox ItemsSource="{Binding ReasonOptions}"
+                  SelectedItem="{Binding SelectedReasonOption, Mode=TwoWay}"
+                  MinWidth="96" FontSize="12" VerticalAlignment="Center"
+                  Margin="0,0,6,0"
+                  IsVisible="{Binding ShowReasonFilter}"
+                  ToolTip.Tip="{Binding L.ReasonFilterHint}"/>
         <Button Classes="ghost" Content="↻" FontSize="15" Padding="7,1" Margin="0,0,4,0"
                 Command="{Binding RefreshCommand}" IsEnabled="{Binding IsNotBusy}"
                 IsVisible="{Binding !ShowActionBar}"

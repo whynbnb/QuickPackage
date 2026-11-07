@@ -39,6 +39,8 @@ C# 14 and Avalonia.
   origin or update status, with a remembered direction
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
+- **Install-reason filter** (any / explicit / dependency) for installed
+  pacman/AUR packages, available from the Pacman and AUR chips
 - **Ignore updates** per package (stored in the config and passed to pacman
   and the AUR helper as `--ignore`), with an Ignored badge
 - Rich pacman metadata in the detail pane — architecture, build date,
