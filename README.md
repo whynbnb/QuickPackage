@@ -15,14 +15,16 @@ C# 14 and Avalonia.
 - **Installed / not installed / all** list filters (installed by default),
   backed by the full pacman sync catalogue so uninstalled repository
   packages can be searched, inspected and installed directly
-- **Package origin filter** with every repository present in the loaded
-  lists, so the view can be narrowed to e.g. core, extra or chaotic-aur
+- **Package origin filter** with every repository present in the current
+  backend and install-state scope, so e.g. selecting Pacman only offers the
+  pacman repositories rather than AUR, Flatpak or cargo origins
 - Orphan filter for pacman/AUR with bulk removal, plus explicit/dependency
   install-reason tags and one-click promotion to explicitly installed
 - Rich pacman metadata in the detail pane — architecture, build date,
-  package groups, provides, optional dependencies and conflicts — with
-  package groups also shown as pill tags on each list row; clicking a group
-  chip filters the list to that group and shows a removable filter chip
+  download and installed size, package groups, provides, optional
+  dependencies and conflicts — with package groups also shown as pill tags
+  on each list row; clicking a group chip filters the list to that group and
+  shows a removable filter chip
 - **Cache cleanup** for pacman and the AUR helper: shows both cache sizes
   and contents (versions, sizes, installed/old status, cached AUR sources),
   and uses paccache (falling back to `pacman -Sc`), plus the helper's native

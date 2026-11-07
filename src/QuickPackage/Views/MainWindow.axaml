@@ -75,16 +75,24 @@
 
     <!-- Filter chips -->
     <DockPanel Grid.Row="2" Margin="12,2,12,6">
-      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="6"
-                  Margin="0,0,12,0" VerticalAlignment="Center">
+      <StackPanel DockPanel.Dock="Left" Orientation="Horizontal"
+                  Margin="0,0,4,0" VerticalAlignment="Center">
         <ToggleButton Classes="chip" Content="{Binding L.InstalledOnly}"
+                      Margin="0,0,6,4"
                       IsChecked="{Binding IsInstalledFilter, Mode=TwoWay}"/>
         <ToggleButton Classes="chip" Content="{Binding L.NotInstalledOnly}"
+                      Margin="0,0,6,4"
                       IsChecked="{Binding IsNotInstalledFilter, Mode=TwoWay}"/>
         <ToggleButton Classes="chip" Content="{Binding L.AllPackages}"
+                      Margin="0,0,0,4"
                       IsChecked="{Binding IsAllPackagesFilter, Mode=TwoWay}"/>
       </StackPanel>
-      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8">
+      <Border DockPanel.Dock="Left" Width="1" Height="20"
+              VerticalAlignment="Center"
+              Background="{DynamicResource CardBorderBrush}"
+              Margin="0,0,10,4"/>
+      <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Spacing="8"
+                  VerticalAlignment="Center">
         <ComboBox ItemsSource="{Binding OriginOptions}"
                   SelectedItem="{Binding SelectedOrigin, Mode=TwoWay}"
                   MinWidth="128" FontSize="12" VerticalAlignment="Center"
@@ -105,7 +113,7 @@
                       IsEnabled="{Binding HasUpdates}"
                       ToolTip.Tip="{Binding L.ShowOnlyUpdates}"/>
       </StackPanel>
-      <ItemsControl ItemsSource="{Binding Chips}">
+      <ItemsControl ItemsSource="{Binding Chips}" VerticalAlignment="Center">
         <ItemsControl.ItemsPanel>
           <ItemsPanelTemplate>
             <WrapPanel/>
@@ -269,16 +277,22 @@
                         CommandParameter="{Binding SelectedPackage}"
                         IsVisible="{Binding IsInstalledSelectedPackage}"
                         IsEnabled="{Binding CanUpdateSelectedPackage}"/>
-                <Button Classes="detail" Content="{Binding L.MakeExplicit}"
-                        Command="{Binding MakeExplicitCommand}"
-                        CommandParameter="{Binding SelectedPackage}"
-                        IsVisible="{Binding CanMakeExplicit}"
-                        IsEnabled="{Binding CanMakeExplicit}"/>
                 <Button Classes="detail danger" Content="{Binding L.UninstallDetail}"
                         Command="{Binding UninstallPackageCommand}"
                         CommandParameter="{Binding SelectedPackage}"
                         IsVisible="{Binding CanUninstallSelectedPackage}"
                         IsEnabled="{Binding CanUninstallSelectedPackage}"/>
+                <!-- Promotion to explicit is rare, so it lives in a small menu. -->
+                <Button Classes="detail" Content="{Binding L.More}"
+                        IsVisible="{Binding CanMakeExplicit}">
+                  <Button.Flyout>
+                    <MenuFlyout>
+                      <MenuItem Header="{Binding L.MakeExplicit}"
+                                Command="{Binding MakeExplicitCommand}"
+                                CommandParameter="{Binding SelectedPackage}"/>
+                    </MenuFlyout>
+                  </Button.Flyout>
+                </Button>
               </StackPanel>
             </StackPanel>
 

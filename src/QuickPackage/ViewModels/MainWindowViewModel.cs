@@ -333,6 +333,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (_installState != state)
         {
             _installState = state;
+            RebuildOriginOptions();
             SyncFilterSelection();
             ApplyFilter();
         }
@@ -367,6 +368,7 @@ public partial class MainWindowViewModel : ObservableObject
         var previous = SelectedOrigin ?? string.Empty;
         _allOriginsLabel = Loc.T("All origins");
         var origins = _all
+            .Where(MatchesScope)
             .Select(item => item.Model.Origin)
             .Where(origin => origin.Length > 0)
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -484,6 +486,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (dev)
             SelectChip(ChipKind.All);
         RefreshModeUi(adjustMode: false);
+        RebuildOriginOptions();
         ApplyFilter();
         UpdateCounters();
     }
@@ -571,6 +574,7 @@ public partial class MainWindowViewModel : ObservableObject
         foreach (var chip in Chips)
             chip.IsChecked = chip.Kind == kind;
         _suppressChipEvents = false;
+        RebuildOriginOptions();
         ApplyFilter();
         // Narrowing the backend also narrows the bulk selection, otherwise
         // hidden rows of other backends would still be updated/removed and
@@ -1537,6 +1541,7 @@ public partial class MainWindowViewModel : ObservableObject
         if (!model.Installed)
             Add(Loc.T("Status:"), Loc.T("Not installed"));
         Add(Loc.T("Size:"), model.Size);
+        Add(Loc.T("Download size:"), model.DownloadSize);
         Add(Loc.T("Install date:"), model.InstallDate);
         Add(Loc.T("Build date:"), model.BuildDate);
         if (model.Installed)

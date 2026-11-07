@@ -39,6 +39,7 @@ public sealed class Package
     public string Description { get; set; } = string.Empty;
     public string Origin { get; set; } = string.Empty;
     public string Size { get; set; } = string.Empty;
+    public string DownloadSize { get; set; } = string.Empty;
     public string InstallDate { get; set; } = string.Empty;
     public string BuildDate { get; set; } = string.Empty;
     public string InstallReason { get; set; } = string.Empty;

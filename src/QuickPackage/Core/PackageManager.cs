@@ -430,12 +430,83 @@ public sealed partial class PackageManager
 
     private async Task<List<Package>> QueryPacmanAsync(CancellationToken cancellationToken)
     {
-        var result = new List<Package>();
         // LANG/LC_ALL=C keep the "key : value" layout stable for parsing.
         var environment = EnvironmentWith(Backend.Pacman, ("LANG", "C"), ("LC_ALL", "C"));
         var query = await CommandRunner.RunAsync("pacman", ["-Qi"], _queryTimeoutMilliseconds, environment, cancellationToken)
             .ConfigureAwait(false);
+        var installed = ParsePackageInfo(query.Output, installed: true);
 
+        // "pacman -Si" carries the same detail block for every sync package,
+        // including the ones that are not installed. One pass also supplies
+        // the repository for installed packages, since "pacman -Qi" does not
+        // include one on every system.
+        var syncQuery = await CommandRunner.RunAsync(
+            "pacman", ["-Si"], _queryTimeoutMilliseconds, environment, cancellationToken)
+            .ConfigureAwait(false);
+        var sync = new Dictionary<string, Package>(StringComparer.Ordinal);
+        var syncOrder = new List<string>();
+        foreach (var available in ParsePackageInfo(syncQuery.Output, installed: false))
+        {
+            if (sync.TryAdd(available.Name, available))
+                syncOrder.Add(available.Name);
+        }
+
+        var orphanRun = await CommandRunner.RunAsync(
+            "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken,
+            expectedExits: [new CommandRunner.ExpectedExit(1, "No orphans", RequireEmptyOutput: true)]).ConfigureAwait(false);
+        var orphans = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var rawLine in orphanRun.Output.Split('\n'))
+        {
+            var name = rawLine.Trim();
+            if (name.Length > 0)
+                orphans.Add(name);
+        }
+
+        var enabled = new List<Package>(installed.Count + sync.Count);
+        var installedNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var item in installed)
+        {
+            item.Orphan = orphans.Contains(item.Name);
+            installedNames.Add(item.Name);
+            if (sync.TryGetValue(item.Name, out var entry))
+            {
+                item.Origin = entry.Origin;
+                item.Backend = Backend.Pacman;
+                item.Foreign = false;
+                if (_enabled[Backend.Pacman])
+                    enabled.Add(item);
+            }
+            else
+            {
+                item.Origin = Loc.T("AUR / local");
+                item.Backend = Backend.Aur;
+                item.Foreign = true;
+                if (_enabled[Backend.Aur])
+                    enabled.Add(item);
+            }
+        }
+
+        // Repo packages that are not installed are kept available for the
+        // "not installed" / "all" list filters and for direct installation.
+        if (_enabled[Backend.Pacman])
+        {
+            foreach (var name in syncOrder)
+            {
+                if (!installedNames.Contains(name))
+                    enabled.Add(sync[name]);
+            }
+        }
+        return enabled;
+    }
+
+    /// <summary>
+    /// Parses one or more "key : value" package blocks as printed by
+    /// "pacman -Qi" and "pacman -Si". Continuation lines belong to the
+    /// previous key.
+    /// </summary>
+    private static List<Package> ParsePackageInfo(string output, bool installed)
+    {
+        var result = new List<Package>();
         var package = new Package();
         string? currentKey = null;
 
@@ -448,6 +519,7 @@ public sealed partial class PackageManager
                 case "description": package.Description += " " + value; break;
                 case "origin": package.Origin += " " + value; break;
                 case "size": package.Size += " " + value; break;
+                case "downloadsize": package.DownloadSize += " " + value; break;
                 case "date": package.InstallDate += " " + value; break;
                 case "builddate": package.BuildDate += " " + value; break;
                 case "reason": package.InstallReason += " " + value; break;
@@ -470,7 +542,7 @@ public sealed partial class PackageManager
             {
                 package.PackageId = package.Name;
                 package.Backend = Backend.Pacman;
-                package.Installed = true;
+                package.Installed = installed;
                 // pacman prints the literal "None" for empty list fields.
                 package.Groups = CleanList(package.Groups);
                 package.Provides = CleanList(package.Provides);
@@ -483,7 +555,7 @@ public sealed partial class PackageManager
             package = new Package();
         }
 
-        foreach (var rawLine in query.Output.Split('\n'))
+        foreach (var rawLine in output.Split('\n'))
         {
             var line = rawLine.TrimEnd('\r');
             if (string.IsNullOrWhiteSpace(line))
@@ -509,6 +581,7 @@ public sealed partial class PackageManager
                 case "Description": package.Description = value; currentKey = "description"; break;
                 case "Repository": package.Origin = value; currentKey = "origin"; break;
                 case "Installed Size": package.Size = value; currentKey = "size"; break;
+                case "Download Size": package.DownloadSize = value; currentKey = "downloadsize"; break;
                 case "Install Date": package.InstallDate = value; currentKey = "date"; break;
                 case "Build Date": package.BuildDate = value; currentKey = "builddate"; break;
                 case "Install Reason":
@@ -530,118 +603,7 @@ public sealed partial class PackageManager
             }
         }
         Flush();
-
-        // "pacman -Ss" lists every sync package with its description and an
-        // [installed] marker, so one pass provides both the origin map for
-        // installed packages and the uninstalled catalogue. "pacman -Qi"
-        // itself carries no repository on every system.
-        var syncRun = await CommandRunner.RunAsync(
-            "pacman", ["-Ss"], _queryTimeoutMilliseconds, environment, cancellationToken)
-            .ConfigureAwait(false);
-        var sync = new Dictionary<string, SyncEntry>(StringComparer.Ordinal);
-        var syncOrder = new List<string>();
-        SyncEntry? syncEntry = null;
-        foreach (var rawLine in syncRun.Output.Split('\n'))
-        {
-            var line = rawLine.TrimEnd('\r');
-            var match = SyncSearchRegex().Match(line);
-            if (match.Success)
-            {
-                syncEntry = new SyncEntry
-                {
-                    Repo = match.Groups["repo"].Value,
-                    Name = match.Groups["name"].Value,
-                    Version = match.Groups["version"].Value,
-                    MarkedInstalled = match.Groups["flags"].Value.Contains(
-                        "[installed]", StringComparison.Ordinal),
-                };
-                if (!sync.TryGetValue(syncEntry.Name, out var existing))
-                {
-                    sync.Add(syncEntry.Name, syncEntry);
-                    syncOrder.Add(syncEntry.Name);
-                }
-                else if (!existing.MarkedInstalled && syncEntry.MarkedInstalled)
-                {
-                    // The repo pacman considers the installed source wins.
-                    sync[syncEntry.Name] = syncEntry;
-                }
-                continue;
-            }
-            if (syncEntry is not null && line.Trim().Length > 0)
-            {
-                var text = line.Trim();
-                syncEntry.Description = syncEntry.Description.Length == 0
-                    ? text
-                    : syncEntry.Description + " " + text;
-            }
-        }
-
-        var orphanRun = await CommandRunner.RunAsync(
-            "pacman", ["-Qdtq"], _queryTimeoutMilliseconds, environment, cancellationToken,
-            expectedExits: [new CommandRunner.ExpectedExit(1, "No orphans", RequireEmptyOutput: true)]).ConfigureAwait(false);
-        var orphans = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var rawLine in orphanRun.Output.Split('\n'))
-        {
-            var name = rawLine.Trim();
-            if (name.Length > 0)
-                orphans.Add(name);
-        }
-
-        var enabled = new List<Package>(result.Count + sync.Count);
-        var installedNames = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var item in result)
-        {
-            item.Orphan = orphans.Contains(item.Name);
-            installedNames.Add(item.Name);
-            if (sync.TryGetValue(item.Name, out var entry))
-            {
-                item.Origin = entry.Repo;
-                item.Backend = Backend.Pacman;
-                item.Foreign = false;
-                if (_enabled[Backend.Pacman])
-                    enabled.Add(item);
-            }
-            else
-            {
-                item.Origin = Loc.T("AUR / local");
-                item.Backend = Backend.Aur;
-                item.Foreign = true;
-                if (_enabled[Backend.Aur])
-                    enabled.Add(item);
-            }
-        }
-
-        // Repo packages that are not installed are kept available for the
-        // "not installed" / "all" list filters and for direct installation.
-        if (_enabled[Backend.Pacman])
-        {
-            foreach (var name in syncOrder)
-            {
-                if (installedNames.Contains(name))
-                    continue;
-                var entry = sync[name];
-                enabled.Add(new Package
-                {
-                    Name = entry.Name,
-                    PackageId = entry.Name,
-                    Version = entry.Version,
-                    Description = entry.Description,
-                    Origin = entry.Repo,
-                    Backend = Backend.Pacman,
-                    Installed = false,
-                });
-            }
-        }
-        return enabled;
-    }
-
-    private sealed class SyncEntry
-    {
-        public string Repo { get; init; } = string.Empty;
-        public string Name { get; init; } = string.Empty;
-        public string Version { get; init; } = string.Empty;
-        public bool MarkedInstalled { get; init; }
-        public string Description { get; set; } = string.Empty;
+        return result;
     }
 
     private async Task<List<Package>> QueryFlatpakAsync(CancellationToken cancellationToken)
@@ -1412,9 +1374,6 @@ public sealed partial class PackageManager
     /// <summary>pacman uses the literal "None" for an empty list field.</summary>
     private static string CleanList(string value)
         => value == "None" ? string.Empty : value;
-
-    [GeneratedRegex(@"^(?<repo>[^/\s]+)/(?<name>\S+)\s+(?<version>\S+)(?<flags>.*)$")]
-    private static partial Regex SyncSearchRegex();
 
     [GeneratedRegex(@"^\s*""([a-zA-Z0-9_.+-]+) ([^\s""]+) \(([^)]*)\)""\s*=\s*\[([^\]]*)\]")]
     private static partial Regex CargoEntryRegex();
